@@ -48,6 +48,8 @@
 		"vite-plugin-devtools-json": "^1.0.0"
 	},
 	"dependencies": {
-		"postgres": "^3.4.8"
+		"html2canvas": "^1.4.1",
+		"postgres": "^3.4.8",
+		"webdav": "^5.9.0"
 	}
 }
