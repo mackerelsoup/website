@@ -1,10 +1,8 @@
-import { WEBDAV_PASSWORD } from "$env/static/private";
+import { WEBDAV_PASSWORD, WEBDAV_URL } from "$env/static/private";
 import type { PageServerLoad, Actions } from "./$types";
 import { listDirectory, moveItem, deleteItem, writeFile } from "$lib/webdav";
 import { redirect } from "@sveltejs/kit";
-import type { FileStat } from "webdav";
 
-const WEBDAV_URL: string = 'https://homelab.tail3fdd8a.ts.net:8443/webdav/'
 const WEBDAV_USERNAME: string = 'homelab'
 
 export const actions: Actions = {

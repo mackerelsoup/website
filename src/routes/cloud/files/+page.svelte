@@ -46,11 +46,10 @@
 	}
 </script>
 
-{#if menuOpen}
-	<button class="overlay" aria-label="Close menu" onclick={closeMenu}></button>
-{/if}
-
 <div class="files">
+	{#if menuOpen}
+		<button class="overlay" aria-label="Close menu" onclick={closeMenu}></button>
+	{/if}
 	{#if data.error}
 		<div class="prompt">
 			<span class="prompt-user">zt@homelab:</span><span class="prompt-path">{data.path}</span>
@@ -121,4 +120,4 @@
 			</div>
 		{/each}
 	{/if}
-</div>
+	</div>

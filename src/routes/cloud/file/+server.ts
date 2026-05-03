@@ -1,9 +1,8 @@
-import { WEBDAV_PASSWORD } from "$env/static/private";
+import { WEBDAV_PASSWORD, WEBDAV_URL } from "$env/static/private";
 import { getClient } from "$lib/webdav";
 import { error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 
-const WEBDAV_URL = 'https://homelab.tail3fdd8a.ts.net:8443/webdav/'
 const WEBDAV_USERNAME = 'homelab'
 
 export const GET: RequestHandler = async ({ url }) => {

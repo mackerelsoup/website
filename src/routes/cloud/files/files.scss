@@ -6,7 +6,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 1;
+  z-index: 51;
 }
 
 .files {
@@ -89,7 +89,6 @@
 
 .menu-wrapper {
   position: relative;
-  z-index: 2;
 }
 
 .dropdown {
@@ -99,6 +98,7 @@
   background: #404258;
   border: 1px solid #50577A;
   overflow: hidden;
+  z-index: 100;
   min-width: 120px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   font-family: inherit;
