@@ -1,5 +1,6 @@
 <script lang="ts">
 	import './files.scss';
+	import { invalidateAll } from '$app/navigation';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -9,7 +10,14 @@
 	let renameValue = $state('');
 
 	let fileInput: HTMLInputElement = $state()!;
-	let uploadForm: HTMLFormElement = $state()!;
+
+	type UploadPhase = 'idle' | 'uploading' | 'saving' | 'done' | 'error';
+	let uploadPhase = $state<UploadPhase>('idle');
+	let uploadPercent = $state(0);
+	let savingFilename = $state('');
+	let savingIndex = $state(0);
+	let savingTotal = $state(0);
+	let uploadError = $state('');
 
 	function parentPath(path: string): string {
 		const parts = path.replace(/\/$/, '').split('/');
@@ -25,15 +33,72 @@
 		menuOpen = menuOpen === filename ? null : filename;
 	}
 
-  function triggerUpload() {
-    fileInput.click();
-  }
+	function triggerUpload() {
+		fileInput.click();
+	}
 
-  function handleFileSelect() {
-    if (fileInput.files?.length) {
-      uploadForm.requestSubmit();
-    }
-  }
+	function handleFileSelect() {
+		if (!fileInput.files?.length) return;
+
+		const formData = new FormData();
+		formData.append('path', data.path);
+		for (const file of fileInput.files) {
+			formData.append('files', file);
+		}
+		fileInput.value = '';
+
+		uploadPhase = 'uploading';
+		uploadPercent = 0;
+
+		const xhr = new XMLHttpRequest();
+		xhr.open('POST', '/cloud/files/upload');
+
+		xhr.upload.onprogress = (e) => {
+			if (e.lengthComputable) {
+				uploadPercent = Math.round((e.loaded / e.total) * 100);
+			}
+		};
+
+		xhr.onload = () => {
+			const { uploadId } = JSON.parse(xhr.responseText);
+			uploadPhase = 'saving';
+
+			const es = new EventSource(`/cloud/files/upload-progress?id=${uploadId}`);
+
+			es.onmessage = (e) => {
+				const event = JSON.parse(e.data);
+				if (event.type === 'saving') {
+					savingFilename = event.filename;
+					savingIndex = event.index + 1;
+					savingTotal = event.total;
+				} else if (event.type === 'complete') {
+					uploadPhase = 'done';
+					es.close();
+					setTimeout(() => {
+						uploadPhase = 'idle';
+						invalidateAll();
+					}, 1200);
+				} else if (event.type === 'error') {
+					uploadPhase = 'error';
+					uploadError = event.message;
+					es.close();
+				}
+			};
+
+			es.onerror = () => {
+				uploadPhase = 'error';
+				uploadError = 'connection lost';
+				es.close();
+			};
+		};
+
+		xhr.onerror = () => {
+			uploadPhase = 'error';
+			uploadError = 'upload failed';
+		};
+
+		xhr.send(formData);
+	}
 
 	function startRename(filename: string, basename: string) {
 		menuOpen = null;
@@ -66,10 +131,24 @@
 				</div>
 			</div>
 
-        <form bind:this={uploadForm} method="POST" action="?/upload" enctype="multipart/form-data" style="display:none">
-          <input type="hidden" name="path" value={data.path} />
-          <input type="file" name="files" multiple bind:this={fileInput} onchange={handleFileSelect} />
-        </form>
+        <input type="file" name="files" multiple bind:this={fileInput} onchange={handleFileSelect} style="display:none" />
+
+			{#if uploadPhase !== 'idle'}
+				<div class="upload-banner">
+					{#if uploadPhase === 'uploading'}
+						<span class="banner-label">uploading... {uploadPercent}%</span>
+						<div class="progress-bar"><div class="progress-fill" style="width:{uploadPercent}%"></div></div>
+					{:else if uploadPhase === 'saving'}
+						<span class="banner-label">saving to cloud</span>
+						<span class="banner-filename">{savingFilename}{savingTotal > 1 ? ` (${savingIndex}/${savingTotal})` : ''}</span>
+					{:else if uploadPhase === 'done'}
+						<span class="banner-label">done</span>
+					{:else if uploadPhase === 'error'}
+						<span class="banner-label error-text">{uploadError}</span>
+						<button class="banner-dismiss" onclick={() => uploadPhase = 'idle'}>dismiss</button>
+					{/if}
+				</div>
+			{/if}
 		</div>
 
 		{#if data.path !== '/'}

@@ -1,6 +1,6 @@
 import { WEBDAV_PASSWORD, WEBDAV_URL } from "$env/static/private";
 import type { PageServerLoad, Actions } from "./$types";
-import { listDirectory, moveItem, deleteItem, writeFile } from "$lib/webdav";
+import { listDirectory, moveItem, deleteItem } from "$lib/webdav";
 import { redirect } from "@sveltejs/kit";
 
 const WEBDAV_USERNAME: string = 'homelab'
@@ -33,19 +33,6 @@ export const actions: Actions = {
     throw redirect(303, `/cloud/files?path=${encodeURIComponent(returnPath)}`)
   },
 
-  upload: async ({ request }) => {
-    const form = await request.formData()
-    const dir = form.get('path') as string
-    const files = form.getAll('files') as File[]
-
-    await Promise.all(files.map(async (file) => {
-      const buffer = Buffer.from(await file.arrayBuffer())
-      const uploadPath = `${dir.replace(/\/$/, '')}/${file.name}`
-      await writeFile(WEBDAV_URL, WEBDAV_USERNAME, WEBDAV_PASSWORD, uploadPath, buffer)
-    }))
-
-    throw redirect(303, `/cloud/files?path=${encodeURIComponent(dir)}`)
-  }
 }
 
 export const load: PageServerLoad = async ({ url }) => {

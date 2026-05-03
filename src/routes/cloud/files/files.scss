@@ -166,3 +166,42 @@
 
   &::before { content: 'bash: '; color: #50577A; }
 }
+
+.upload-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-left: 2px solid #50577A;
+  padding: 5px 10px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+  color: #6B728E;
+}
+
+.banner-label { color: #6B728E; }
+.banner-filename { color: #c4c6d4; }
+.error-text { color: #f87171; }
+
+.progress-bar {
+  flex: 1;
+  height: 2px;
+  background: #404258;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #6B728E;
+  transition: width 0.1s;
+}
+
+.banner-dismiss {
+  background: none;
+  border: none;
+  color: #50577A;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+
+  &:hover { color: #c4c6d4; }
+}
