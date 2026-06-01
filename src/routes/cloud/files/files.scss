@@ -1,4 +1,4 @@
-:global(body) {
+  :global(body) {
   background: #1e1f2e;
   margin: 0;
 }
@@ -33,7 +33,6 @@
 
 .upload-btn {
   background: none;
-  border: 1px solid #50577A;
   color: #6B728E;
   font-family: inherit;
   font-size: 0.85rem;
@@ -56,6 +55,7 @@
   display: flex;
   align-items: center;
   margin-bottom: 1px;
+  user-select: none;
 }
 
 .entry {
@@ -66,11 +66,12 @@
   text-decoration: none;
   font-size: 0.95rem;
 
+  &:focus-visible { outline: 1px solid #6B728E; }
   &:hover { background: #404258; }
 }
 
 .dir { color: #6B728E; font-weight: bold; }
-.file { color: #c4c6d4; }
+.file { color: #c4c6d4; margin: 2px;}
 
 .dots {
   background: none;
@@ -193,6 +194,51 @@
   background: #6B728E;
   transition: width 0.1s;
 }
+
+.prompt-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  form { display: contents; }
+}
+
+.delete-btn {
+  background: none;
+  color: #f87171;
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 1px 10px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+
+  &::before { content: '[ '; }
+  &::after  { content: ' ]'; }
+
+  &:hover {
+    background: #3a2a2a;
+    border-color: #f87171;
+    color: #f87171;
+  }
+}
+
+.select-check {
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  border: 1px solid #50577A;
+  background: transparent;
+  cursor: pointer;
+  margin: 0 6px 0 4px;
+  flex-shrink: 0;
+
+  &:checked {
+    background: #6B728E;
+    border-color: #6B728E;
+  }
+}
+
+.row-selected { background: #272838; }
 
 .banner-dismiss {
   background: none;

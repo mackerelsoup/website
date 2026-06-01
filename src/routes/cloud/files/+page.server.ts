@@ -33,6 +33,16 @@ export const actions: Actions = {
     throw redirect(303, `/cloud/files?path=${encodeURIComponent(returnPath)}`)
   },
 
+  deleteMany: async ({ request }) => {
+    const form = await request.formData()
+    const paths = form.getAll('path') as string[]
+    const returnPath = form.get('returnPath') as string
+
+    await Promise.all(paths.map((p) => deleteItem(WEBDAV_URL, WEBDAV_USERNAME, WEBDAV_PASSWORD, p)))
+
+    throw redirect(303, `/cloud/files?path=${encodeURIComponent(returnPath)}`)
+  },
+
 }
 
 export const load: PageServerLoad = async ({ url }) => {
