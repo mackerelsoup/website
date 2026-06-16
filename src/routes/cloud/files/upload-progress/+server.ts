@@ -1,14 +1,10 @@
 import type { RequestHandler } from './$types'
-import { getUploadSession } from '$lib/server/upload-state'
+import { getOrCreateUploadSession } from '$lib/server/upload-state'
 import type { UploadEvent } from '$lib/server/upload-state'
 
 export const GET: RequestHandler = ({ url }) => {
 	const id = url.searchParams.get('id') ?? ''
-	const session = getUploadSession(id)
-
-	if (!session) {
-		return new Response('Session not found', { status: 404 })
-	}
+	const session = getOrCreateUploadSession(id)
 
 	const stream = new ReadableStream({
 		start(controller) {

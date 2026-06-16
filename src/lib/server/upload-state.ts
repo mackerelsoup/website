@@ -31,6 +31,12 @@ export function getUploadSession(id: string): UploadSession | undefined {
 	return uploads.get(id)
 }
 
+// SSE connects before the upload/init request creates the session (the client opens
+// it immediately on start()), so the session must be created on demand here too.
+export function getOrCreateUploadSession(id: string): UploadSession {
+	return createUploadSession(id)
+}
+
 export function emitUploadEvent(id: string, event: UploadEvent): void {
 	const session = uploads.get(id)
 	if (!session) return
