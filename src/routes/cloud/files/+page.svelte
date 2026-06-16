@@ -3,6 +3,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { tick } from 'svelte';
 	import type { PageProps } from './$types';
+	import { computeTransferId, totalChunks, CHUNK_SIZE } from '$lib/upload-constants';
 
 	let { data }: PageProps = $props();
 
@@ -67,9 +68,13 @@
 	let uploadPhase = $state<UploadPhase>('idle');
 	let uploadPercent = $state(0);
 	let savingFilename = $state('');
+	let savingStatus = $state<'saving' | 'saved'>('saving');
 	let savingIndex = $state(0);
 	let savingTotal = $state(0);
 	let uploadError = $state('');
+	let uploadingFilename = $state('');
+	let uploadingIndex = $state(0);
+	let uploadingTotal = $state(0);
 
 	function parentPath(path: string): string {
 		const parts = path.replace(/\/$/, '').split('/');
@@ -90,65 +95,101 @@
 	}
 
 	async function startUpload(files: FileList, useRelativePaths = false) {
-		const formData = new FormData();
-		formData.append('path', data.path);
-		for (const file of files) {
-			formData.append('files', file);
-			formData.append('relativePaths', useRelativePaths ? file.webkitRelativePath || file.name : file.name);
-		}
+		const uploadId = crypto.randomUUID(); // ephemeral, SSE-only — not the transferId
+		const fileList = [...files];
 
-		uploadPhase = 'uploading';
-		uploadPercent = 0;
-		await tick();
-
-		const xhr = new XMLHttpRequest();
-		xhr.open('POST', '/cloud/files/upload');
-
-		xhr.upload.onprogress = (e) => {
-			if (e.lengthComputable) {
-				uploadPercent = Math.round((e.loaded / e.total) * 100);
+		const es = new EventSource(`/cloud/files/upload-progress?id=${uploadId}`);
+		es.onmessage = (e) => {
+			const ev = JSON.parse(e.data);
+			if (ev.type === 'saving') {
+				uploadPhase = 'saving';
+				savingFilename = ev.filename;
+				savingIndex = ev.index + 1;
+				savingTotal = ev.total;
+			} else if (ev.type === 'complete') {
+				uploadPhase = 'done';
+				es.close();
+				setTimeout(() => {
+					uploadPhase = 'idle';
+					invalidateAll();
+				}, 1200);
+			} else if (ev.type === 'error') {
+				uploadPhase = 'error';
+				uploadError = ev.message;
+				es.close();
 			}
 		};
 
-		xhr.onload = () => {
-			const { uploadId } = JSON.parse(xhr.responseText);
-			uploadPhase = 'saving';
+		await tick();
 
-			const es = new EventSource(`/cloud/files/upload-progress?id=${uploadId}`);
+		uploadingTotal = fileList.length;
 
-			es.onmessage = (e) => {
-				const event = JSON.parse(e.data);
-				if (event.type === 'saving') {
-					savingFilename = event.filename;
-					savingIndex = event.index + 1;
-					savingTotal = event.total;
-				} else if (event.type === 'complete') {
-					uploadPhase = 'done';
-					es.close();
-					setTimeout(() => {
-						uploadPhase = 'idle';
-						invalidateAll();
-					}, 1200);
-				} else if (event.type === 'error') {
-					uploadPhase = 'error';
-					uploadError = event.message;
-					es.close();
+		for (let f = 0; f < fileList.length; f++) {
+			uploadPhase = 'uploading';
+			const file = fileList[f];
+			const filename = useRelativePaths ? file.webkitRelativePath || file.name : file.name;
+			uploadingFilename = filename;
+			uploadingIndex = f + 1;
+			uploadPercent = 0;
+
+			const transferId = await computeTransferId(data.path, filename, file.size, file.lastModified);
+			const total = totalChunks(file.size);
+
+			// 2. idempotent init → which chunks server already has
+			const initRes = await fetch('/cloud/files/upload/init', {
+				method: 'POST',
+				body: JSON.stringify({
+					uploadId,
+					transferId,
+					destPath: data.path,
+					filename,
+					size: file.size,
+					totalChunks: total
+				})
+			});
+			const { received } = await initRes.json();
+			//This is the number of chunks that are on the temp folder in the server
+			const have = new Set<number>(received);
+
+			let confirmed = have.size;
+			uploadPercent = Math.round((confirmed / total) * 100);
+
+			// 3. upload missing chunks sequentially
+			for (let i = 0; i < total; i++) {
+				if (have.has(i)) continue;
+				const blob = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+				const params = new URLSearchParams({
+					transferId,
+					index: String(i),
+					uploadId,
+					fileIndex: String(f),
+					totalFiles: String(fileList.length)
+				});
+
+				//Each chunk will have a 2 retry count
+				let attempts = 0;
+				while (attempts < 2) {
+					try {
+						const res = await fetch(`/cloud/files/upload/chunk?${params}`, {
+							method: 'PUT',
+							body: blob
+						});
+						if (!res.ok) throw new Error(`HTTP ${res.status}`);
+						confirmed++;
+						break;
+					} catch (e) {
+						attempts++;
+						if (attempts >= 2) {
+							// re-init: server may have restarted, refresh `have` and restart the chunk loop
+							// Don't do this first
+						}
+						await new Promise((r) => setTimeout(r, 500 * attempts)); // backoff
+					}
 				}
-			};
 
-			es.onerror = () => {
-				uploadPhase = 'error';
-				uploadError = 'connection lost';
-				es.close();
-			};
-		};
-
-		xhr.onerror = () => {
-			uploadPhase = 'error';
-			uploadError = 'upload failed';
-		};
-
-		xhr.send(formData);
+				uploadPercent = Math.round((confirmed / total) * 100); // client-driven, no SSE
+			}
+		}
 	}
 
 	function startRename(filename: string, basename: string) {
@@ -162,7 +203,12 @@
 	}
 </script>
 
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && selecting) exitSelect(); stopUploading();}} />
+<svelte:window
+	onkeydown={(e) => {
+		if (e.key === 'Escape' && selecting) exitSelect();
+		stopUploading();
+	}}
+/>
 
 <div class="files">
 	{#if menuOpen}
@@ -189,7 +235,7 @@
 									<input type="hidden" name="path" value={path} />
 								{/each}
 								<button type="submit" class="delete-btn">delete ({selected.size})</button>
-							</form>	
+							</form>
 						{/if}
 					{:else if uploading}
 						<button type="button" class="upload-btn" onclick={stopUploading}>cancel</button>
@@ -202,22 +248,54 @@
 				</div>
 			</div>
 
-        <input type="file" name="files" multiple bind:this={fileInput} onchange={() => { if (fileInput.files?.length) { startUpload(fileInput.files); fileInput.value = ''; } }} style="display:none" />
-        <input type="file" name="files" multiple webkitdirectory bind:this={folderInput} onchange={() => { if (folderInput.files?.length) { startUpload(folderInput.files, true); folderInput.value = ''; } }} style="display:none" />
+			<input
+				type="file"
+				name="files"
+				multiple
+				bind:this={fileInput}
+				onchange={() => {
+					if (fileInput.files?.length) {
+						startUpload(fileInput.files);
+						fileInput.value = '';
+					}
+				}}
+				style="display:none"
+			/>
+			<input
+				type="file"
+				name="files"
+				multiple
+				webkitdirectory
+				bind:this={folderInput}
+				onchange={() => {
+					if (folderInput.files?.length) {
+						startUpload(folderInput.files, true);
+						folderInput.value = '';
+					}
+				}}
+				style="display:none"
+			/>
 
 			{#if uploadPhase !== 'idle'}
 				<div class="upload-banner">
 					{#if uploadPhase === 'uploading'}
 						<span class="banner-label">uploading... {uploadPercent}%</span>
-						<div class="progress-bar"><div class="progress-fill" style="width:{uploadPercent}%"></div></div>
+						<span class="banner-filename"
+							>{uploadingFilename}{uploadingTotal > 1 ? ` (${uploadingIndex}/${uploadingTotal})` : ''}</span
+						>
+						<div class="progress-bar">
+							<div class="progress-fill" style="width:{uploadPercent}%"></div>
+						</div>
 					{:else if uploadPhase === 'saving'}
 						<span class="banner-label">saving to cloud</span>
-						<span class="banner-filename">{savingFilename}{savingTotal > 1 ? ` (${savingIndex}/${savingTotal})` : ''}</span>
+						<span class="banner-filename"
+							>{savingFilename}{savingTotal > 1 ? ` (${savingIndex}/${savingTotal})` : ''}</span
+						>
 					{:else if uploadPhase === 'done'}
 						<span class="banner-label">done</span>
 					{:else if uploadPhase === 'error'}
 						<span class="banner-label error-text">{uploadError}</span>
-						<button class="banner-dismiss" onclick={() => uploadPhase = 'idle'}>dismiss</button>
+						<button class="banner-dismiss" onclick={() => (uploadPhase = 'idle')}>dismiss</button>
 					{/if}
 				</div>
 			{/if}
@@ -254,15 +332,25 @@
 					<a
 						class="entry dir"
 						href="/cloud/files?path={encodeURIComponent(file.filename)}"
-						onclick={selecting ? (e) => { e.preventDefault(); toggleSelect(file.filename, i, e.shiftKey); } : undefined}
-					>{file.basename}/</a>
+						onclick={selecting
+							? (e) => {
+									e.preventDefault();
+									toggleSelect(file.filename, i, e.shiftKey);
+								}
+							: undefined}>{file.basename}/</a
+					>
 				{:else}
 					<a
 						class="entry file"
 						href="/cloud/file?path={encodeURIComponent(file.filename)}"
 						target="_blank"
-						onclick={selecting ? (e) => { e.preventDefault(); toggleSelect(file.filename, i, e.shiftKey); } : undefined}
-					>{file.basename}</a>
+						onclick={selecting
+							? (e) => {
+									e.preventDefault();
+									toggleSelect(file.filename, i, e.shiftKey);
+								}
+							: undefined}>{file.basename}</a
+					>
 				{/if}
 
 				{#if !selecting && renaming !== file.filename}
@@ -283,4 +371,4 @@
 			</div>
 		{/each}
 	{/if}
-	</div>
+</div>

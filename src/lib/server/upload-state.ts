@@ -20,6 +20,9 @@ export function createUploadSession(id: string): UploadSession {
 		emitter: new EventEmitter(),
 		createdAt: Date.now()
 	}
+	const existing = uploads.get(id)
+	if (existing) return existing
+
 	uploads.set(id, session)
 	return session
 }
