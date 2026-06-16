@@ -7,12 +7,14 @@ const ROOT = join(tmpdir(), 'cloud-uploads')
 
 export interface ChunkTransfer {
 	transferId: string
-	destPath: string      // dir to write into
-	filename: string      // relativePath (folder uploads)
+	destPath: string
+	filename: string
 	size: number
 	totalChunks: number
 	createdAt: number
-	dir: string           // temp dir holding chunk.{i} files
+	dir: string
+	finalizing: boolean   // claimed by the first finalize attempt
+	done: boolean         // file written to WebDAV; chunk dir already removed
 }
 
 const transfers = new Map<string, ChunkTransfer>()
@@ -27,8 +29,7 @@ export async function createChunkTransfer(meta: {
 
 	const dir = join(ROOT, meta.transferId)
 	await mkdir(dir, { recursive: true })
-	const transfer: ChunkTransfer = { ...meta, createdAt: Date.now(), dir }
-	transfers.set(meta.transferId, transfer)
+	const transfer: ChunkTransfer = { ...meta, createdAt: Date.now(), dir, finalizing: false, done: false }	transfers.set(meta.transferId, transfer)
 	return transfer
 }
 
@@ -76,7 +77,7 @@ export async function cleanupStaleTransfers() {
 	for (const [id, t] of transfers) {
 		if (t.createdAt < cutoff) {
 			transfers.delete(id)
-			await rm(t.dir, { recursive: true, force: true }).catch(() => {})
+			await rm(t.dir, { recursive: true, force: true }).catch(() => { })
 		}
 	}
 }

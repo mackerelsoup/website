@@ -10,19 +10,16 @@ export interface UploadSession {
 	events: UploadEvent[]
 	emitter: EventEmitter
 	createdAt: number
+	lastActivity: number
 }
 
 export const uploads = new Map<string, UploadSession>()
 
 export function createUploadSession(id: string): UploadSession {
-	const session: UploadSession = {
-		events: [],
-		emitter: new EventEmitter(),
-		createdAt: Date.now()
-	}
 	const existing = uploads.get(id)
 	if (existing) return existing
-
+	const now = Date.now()
+	const session: UploadSession = { events: [], emitter: new EventEmitter(), createdAt: now, lastActivity: now }
 	uploads.set(id, session)
 	return session
 }
@@ -41,14 +38,13 @@ export function emitUploadEvent(id: string, event: UploadEvent): void {
 	const session = uploads.get(id)
 	if (!session) return
 	session.events.push(event)
+	session.lastActivity = Date.now() // keep the session alive while work is happening
 	session.emitter.emit('event', event)
 }
 
 export function cleanupStaleSessions(): void {
-	const cutoff = Date.now() - 5 * 60 * 1000
+	const cutoff = Date.now() - 30 * 60 * 1000 // match chunk-transfer's window
 	for (const [id, session] of uploads) {
-		if (session.createdAt < cutoff) {
-			uploads.delete(id)
-		}
+		if (session.lastActivity < cutoff) uploads.delete(id)
 	}
 }
