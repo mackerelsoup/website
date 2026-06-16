@@ -1,21 +1,26 @@
 <script lang="ts">
 	import './files.scss';
-	import { invalidateAll } from '$app/navigation';
-	import { tick } from 'svelte';
 	import type { PageProps } from './$types';
-	import { computeTransferId, totalChunks, CHUNK_SIZE } from '$lib/upload-constants';
+	import { UploadManager } from './upload.svelte';
 
 	let { data }: PageProps = $props();
 
+	// --- dropdown "..." menu on each row ---
 	let menuOpen = $state<string | null>(null);
+
+	// --- inline rename form, swapped in for a row's link when active ---
 	let renaming = $state<string | null>(null);
 	let renameValue = $state('');
 
+	// --- multi-select mode (checkboxes + bulk delete) ---
 	let selecting = $state(false);
 	let selected = $state(new Set<string>());
-	let lastSelectedIndex = $state<number | null>(null);
+	let lastSelectedIndex = $state<number | null>(null); // anchor for shift-click range select
 
+	// --- upload picker visibility (separate from the upload's own progress UI) ---
 	let uploading = $state(false);
+
+	const upload = new UploadManager();
 
 	function enterSelect() {
 		selecting = true;
@@ -64,18 +69,6 @@
 		folderInput.click();
 	}
 
-	type UploadPhase = 'idle' | 'uploading' | 'saving' | 'done' | 'error';
-	let uploadPhase = $state<UploadPhase>('idle');
-	let uploadPercent = $state(0);
-	let savingFilename = $state('');
-	let savingStatus = $state<'saving' | 'saved'>('saving');
-	let savingIndex = $state(0);
-	let savingTotal = $state(0);
-	let uploadError = $state('');
-	let uploadingFilename = $state('');
-	let uploadingIndex = $state(0);
-	let uploadingTotal = $state(0);
-
 	function parentPath(path: string): string {
 		const parts = path.replace(/\/$/, '').split('/');
 		parts.pop();
@@ -92,104 +85,6 @@
 
 	function triggerUpload() {
 		fileInput.click();
-	}
-
-	async function startUpload(files: FileList, useRelativePaths = false) {
-		const uploadId = crypto.randomUUID(); // ephemeral, SSE-only — not the transferId
-		const fileList = [...files];
-
-		const es = new EventSource(`/cloud/files/upload-progress?id=${uploadId}`);
-		es.onmessage = (e) => {
-			const ev = JSON.parse(e.data);
-			if (ev.type === 'saving') {
-				uploadPhase = 'saving';
-				savingFilename = ev.filename;
-				savingIndex = ev.index + 1;
-				savingTotal = ev.total;
-			} else if (ev.type === 'complete') {
-				uploadPhase = 'done';
-				es.close();
-				setTimeout(() => {
-					uploadPhase = 'idle';
-					invalidateAll();
-				}, 1200);
-			} else if (ev.type === 'error') {
-				uploadPhase = 'error';
-				uploadError = ev.message;
-				es.close();
-			}
-		};
-
-		await tick();
-
-		uploadingTotal = fileList.length;
-
-		for (let f = 0; f < fileList.length; f++) {
-			uploadPhase = 'uploading';
-			const file = fileList[f];
-			const filename = useRelativePaths ? file.webkitRelativePath || file.name : file.name;
-			uploadingFilename = filename;
-			uploadingIndex = f + 1;
-			uploadPercent = 0;
-
-			const transferId = await computeTransferId(data.path, filename, file.size, file.lastModified);
-			const total = totalChunks(file.size);
-
-			// 2. idempotent init → which chunks server already has
-			const initRes = await fetch('/cloud/files/upload/init', {
-				method: 'POST',
-				body: JSON.stringify({
-					uploadId,
-					transferId,
-					destPath: data.path,
-					filename,
-					size: file.size,
-					totalChunks: total
-				})
-			});
-			const { received } = await initRes.json();
-			//This is the number of chunks that are on the temp folder in the server
-			const have = new Set<number>(received);
-
-			let confirmed = have.size;
-			uploadPercent = Math.round((confirmed / total) * 100);
-
-			// 3. upload missing chunks sequentially
-			for (let i = 0; i < total; i++) {
-				if (have.has(i)) continue;
-				const blob = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-				const params = new URLSearchParams({
-					transferId,
-					index: String(i),
-					uploadId,
-					fileIndex: String(f),
-					totalFiles: String(fileList.length)
-				});
-
-				//Each chunk will have a 2 retry count
-				let attempts = 0;
-				while (attempts < 2) {
-					try {
-						const res = await fetch(`/cloud/files/upload/chunk?${params}`, {
-							method: 'PUT',
-							body: blob
-						});
-						if (!res.ok) throw new Error(`HTTP ${res.status}`);
-						confirmed++;
-						break;
-					} catch (e) {
-						attempts++;
-						if (attempts >= 2) {
-							// re-init: server may have restarted, refresh `have` and restart the chunk loop
-							// Don't do this first
-						}
-						await new Promise((r) => setTimeout(r, 500 * attempts)); // backoff
-					}
-				}
-
-				uploadPercent = Math.round((confirmed / total) * 100); // client-driven, no SSE
-			}
-		}
 	}
 
 	function startRename(filename: string, basename: string) {
@@ -255,7 +150,7 @@
 				bind:this={fileInput}
 				onchange={() => {
 					if (fileInput.files?.length) {
-						startUpload(fileInput.files);
+						upload.start(data.path, fileInput.files);
 						fileInput.value = '';
 					}
 				}}
@@ -269,33 +164,37 @@
 				bind:this={folderInput}
 				onchange={() => {
 					if (folderInput.files?.length) {
-						startUpload(folderInput.files, true);
+						upload.start(data.path, folderInput.files, true);
 						folderInput.value = '';
 					}
 				}}
 				style="display:none"
 			/>
 
-			{#if uploadPhase !== 'idle'}
+			{#if upload.phase !== 'idle'}
 				<div class="upload-banner">
-					{#if uploadPhase === 'uploading'}
-						<span class="banner-label">uploading... {uploadPercent}%</span>
+					{#if upload.phase === 'uploading'}
+						<span class="banner-label">uploading... {upload.percent}%</span>
 						<span class="banner-filename"
-							>{uploadingFilename}{uploadingTotal > 1 ? ` (${uploadingIndex}/${uploadingTotal})` : ''}</span
+							>{upload.uploadingFilename}{upload.uploadingTotal > 1
+								? ` (${upload.uploadingIndex}/${upload.uploadingTotal})`
+								: ''}</span
 						>
 						<div class="progress-bar">
-							<div class="progress-fill" style="width:{uploadPercent}%"></div>
+							<div class="progress-fill" style="width:{upload.percent}%"></div>
 						</div>
-					{:else if uploadPhase === 'saving'}
+					{:else if upload.phase === 'saving'}
 						<span class="banner-label">saving to cloud</span>
 						<span class="banner-filename"
-							>{savingFilename}{savingTotal > 1 ? ` (${savingIndex}/${savingTotal})` : ''}</span
+							>{upload.savingFilename}{upload.savingTotal > 1
+								? ` (${upload.savingIndex}/${upload.savingTotal})`
+								: ''}</span
 						>
-					{:else if uploadPhase === 'done'}
+					{:else if upload.phase === 'done'}
 						<span class="banner-label">done</span>
-					{:else if uploadPhase === 'error'}
-						<span class="banner-label error-text">{uploadError}</span>
-						<button class="banner-dismiss" onclick={() => (uploadPhase = 'idle')}>dismiss</button>
+					{:else if upload.phase === 'error'}
+						<span class="banner-label error-text">{upload.error}</span>
+						<button class="banner-dismiss" onclick={() => upload.dismissError()}>dismiss</button>
 					{/if}
 				</div>
 			{/if}
