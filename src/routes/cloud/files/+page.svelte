@@ -100,8 +100,10 @@
 
 <svelte:window
 	onkeydown={(e) => {
-		if (e.key === 'Escape' && selecting) exitSelect();
-		stopUploading();
+		if (e.key === 'Escape') {
+			if (selecting) exitSelect();
+			stopUploading();
+		}
 	}}
 />
 

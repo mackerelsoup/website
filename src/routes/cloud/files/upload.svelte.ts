@@ -101,50 +101,56 @@ export class UploadManager {
 			// idempotent init → which chunks the server already has (e.g. from a retry)
 			const initRes = await fetch('/cloud/files/upload/init', {
 				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					uploadId,
-					transferId,
-					destPath,
-					filename,
-					size: file.size,
-					totalChunks: total
+					uploadId, transferId, destPath, filename,
+					size: file.size, totalChunks: total,
+					fileIndex: f, totalFiles: fileList.length
 				})
 			});
-			const { received } = await initRes.json();
-			const have = new Set<number>(received); // chunks already sitting in the server's temp folder
 
+			const init = await initRes.json();
+			if (init.done) {
+				// server already had every chunk and finalized this file — nothing to send
+				this.percent = 100;
+				continue;
+			}
+
+			const have = new Set<number>(init.received);
 			let confirmed = have.size;
 			this.percent = Math.round((confirmed / total) * 100);
 
-			// upload missing chunks sequentially, each with its own retry budget
+			const MAX_ATTEMPTS = 3;
 			for (let i = 0; i < total; i++) {
 				if (have.has(i)) continue;
 				const blob = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
 				const params = new URLSearchParams({
-					transferId,
-					index: String(i),
-					uploadId,
-					fileIndex: String(f),
-					totalFiles: String(fileList.length)
+					transferId, index: String(i), uploadId,
+					fileIndex: String(f), totalFiles: String(fileList.length)
 				});
 
-				let attempts = 0;
-				while (attempts < 2) {
+				let sent = false;
+				for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
 					try {
-						const res = await fetch(`/cloud/files/upload/chunk?${params}`, {
-							method: 'PUT',
-							body: blob
-						});
+						const res = await fetch(`/cloud/files/upload/chunk?${params}`, { method: 'PUT', body: blob });
 						if (!res.ok) throw new Error(`HTTP ${res.status}`);
-						confirmed++;
+						sent = true;
 						break;
 					} catch {
-						attempts++;
-						await new Promise((r) => setTimeout(r, 500 * attempts)); // backoff
+						if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, 500 * attempt));
 					}
 				}
 
-				this.percent = Math.round((confirmed / total) * 100); // client-driven, no SSE
+				if (!sent) {
+					// don't silently drop the chunk and leave a half-written file — surface it
+					this.phase = 'error';
+					this.error = `Upload failed: chunk ${i + 1}/${total} of ${filename}`;
+					es.close();
+					return; // abort the whole upload
+				}
+
+				confirmed++;
+				this.percent = Math.round((confirmed / total) * 100);
 			}
 		}
 

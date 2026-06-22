@@ -29,7 +29,8 @@ export async function createChunkTransfer(meta: {
 
 	const dir = join(ROOT, meta.transferId)
 	await mkdir(dir, { recursive: true })
-	const transfer: ChunkTransfer = { ...meta, createdAt: Date.now(), dir, finalizing: false, done: false }	transfers.set(meta.transferId, transfer)
+	const transfer: ChunkTransfer = { ...meta, createdAt: Date.now(), dir, finalizing: false, done: false }
+	transfers.set(meta.transferId, transfer)
 	return transfer
 }
 
@@ -49,13 +50,21 @@ export async function receivedChunks(t: ChunkTransfer): Promise<number[]> {
 }
 
 export async function writeChunk(t: ChunkTransfer, index: number, data: Buffer) {
-	// TODO: optionally validate index < totalChunks
+	// reject garbage indices: an out-of-range chunk.N would inflate the count
+	// isComplete relies on and corrupt assembly.
+	if (!Number.isInteger(index) || index < 0 || index >= t.totalChunks) {
+		throw new Error(`chunk index ${index} out of range [0, ${t.totalChunks})`)
+	}
 	await writeFile(join(t.dir, `chunk.${index}`), data)
 }
 
 export async function isComplete(t: ChunkTransfer): Promise<boolean> {
-	const got = await receivedChunks(t)
-	return got.length === t.totalChunks
+	const got = await receivedChunks(t) // sorted ascending, one entry per index on disk
+	if (got.length !== t.totalChunks) return false
+	for (let i = 0; i < t.totalChunks; i++) {
+		if (got[i] !== i) return false // a hole at i, even if the count happens to match
+	}
+	return true
 }
 
 // concatenate chunk.0..chunk.{n-1} in order → single Buffer
@@ -67,9 +76,21 @@ export async function assemble(t: ChunkTransfer): Promise<Buffer> {
 	return Buffer.concat(parts)
 }
 
-export async function disposeTransfer(t: ChunkTransfer) {
-	transfers.delete(t.transferId)
-	await rm(t.dir, { recursive: true, force: true })
+// claim the exclusive right to finalize; sync check-and-set is atomic under
+// Node's single-threaded event loop, so two concurrent "last chunk" requests
+// can't both write.
+export function claimFinalize(t: ChunkTransfer): boolean {
+	if (t.finalizing) return false
+	t.finalizing = true
+	return true
+}
+
+// mark finalized: free the chunk files from disk but KEEP a lightweight record,
+// so a retried last chunk (whose success response was lost in transit) gets
+// answered with finalized:true instead of a confusing 404.
+export async function markDone(t: ChunkTransfer) {
+	t.done = true
+	await rm(t.dir, { recursive: true, force: true }).catch(() => {})
 }
 
 export async function cleanupStaleTransfers() {
