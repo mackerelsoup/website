@@ -72,7 +72,7 @@ export class UploadManager {
 				} else if (ev.type === 'saved') {
 					this.savingStatus = 'saved';
 					this.savingFilename = ev.filename;
-					await new Promise((r) => setTimeout(r, 300));
+					await new Promise((r) => setTimeout(r, 100));
 				} else if (ev.type === 'complete') {
 					this.phase = 'done';
 					es.close();
@@ -92,6 +92,12 @@ export class UploadManager {
 				this.error = ev.message;
 				es.close();
 				return;
+			}
+			if (ev.type === 'complete') {
+				// close as soon as the server signals completion — waiting for drainQueue's
+				// animation delay leaves the connection open after the server ends the stream,
+				// which makes EventSource auto-reconnect and replay the whole event history
+				es.close();
 			}
 			eventQueue.push(ev);
 			drainQueue();
