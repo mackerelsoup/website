@@ -30,8 +30,22 @@ export class UploadManager {
 		this.phase = 'idle';
 	}
 
+	// Remove: import { randomUUID } from 'crypto';
+
+	generateUUID(): string {
+		if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+			return crypto.randomUUID();
+		}
+		//bc its not fuck ass https
+		return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+			const r = Math.random() * 16 | 0;
+			const v = c === 'x' ? r : (r & 0x3 | 0x8);
+			return v.toString(16);
+		});
+	}
+
 	async start(destPath: string, files: FileList, useRelativePaths = false) {
-		const uploadId = crypto.randomUUID(); // ephemeral, SSE-only — not the transferId
+		const uploadId = this.generateUUID(); // ephemeral, SSE-only — not the transferId
 		const fileList = [...files];
 
 		// saving/saved/complete arrive in real time over SSE, often while later files

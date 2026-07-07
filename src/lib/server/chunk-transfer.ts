@@ -25,7 +25,7 @@ export async function createChunkTransfer(meta: {
 	size: number; totalChunks: number
 }): Promise<ChunkTransfer> {
 	const existing = transfers.get(meta.transferId)
-	if (existing) return existing
+	if (existing && !existing.done) return existing
 
 	const dir = join(ROOT, meta.transferId)
 	await mkdir(dir, { recursive: true })
