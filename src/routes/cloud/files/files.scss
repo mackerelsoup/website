@@ -1,12 +1,7 @@
-  :global(body) {
+// ---- page shell ----
+:global(body) {
   background: #1e1f2e;
   margin: 0;
-}
-
-.overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 51;
 }
 
 .files {
@@ -18,9 +13,26 @@
   box-sizing: border-box;
 }
 
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 51;
+}
+
+.error {
+  color: #f87171;
+  font-size: 0.9rem;
+
+  &::before { content: 'bash: '; color: #50577A; }
+}
+
+// ---- prompt bar: path + upload/select/delete actions ----
 .prompt {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
+  align-items: center;
+  row-gap: 8px;
   font-size: 0.95rem;
   margin-bottom: 16px;
   user-select: none;
@@ -30,6 +42,15 @@
 .prompt-path { color: #6B728E; }
 .prompt-dollar { color: #c4c6d4; }
 .prompt-cmd { color: #c4c6d4; }
+
+.prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+
+  form { display: contents; }
+}
 
 .upload-btn {
   background: none;
@@ -50,6 +71,66 @@
   }
 }
 
+.delete-btn {
+  background: none;
+  color: #f87171;
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 1px 10px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+
+  &::before { content: '[ '; }
+  &::after  { content: ' ]'; }
+
+  &:hover {
+    background: #3a2a2a;
+    border-color: #f87171;
+    color: #f87171;
+  }
+}
+
+// ---- upload progress banner ----
+.upload-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-left: 2px solid #50577A;
+  padding: 5px 10px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+  color: #6B728E;
+}
+
+.banner-label { color: #6B728E; }
+.banner-filename { color: #c4c6d4; }
+.error-text { color: #f87171; }
+
+.banner-dismiss {
+  background: none;
+  border: none;
+  color: #50577A;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+
+  &:hover { color: #c4c6d4; }
+}
+
+.progress-bar {
+  flex: 1;
+  height: 2px;
+  background: #404258;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #6B728E;
+  transition: width 0.1s;
+}
+
+// ---- file/directory list rows ----
 .row {
   position: relative;
   display: flex;
@@ -57,6 +138,8 @@
   margin-bottom: 1px;
   user-select: none;
 }
+
+.row-selected { background: #272838; }
 
 .entry {
   flex: 1;
@@ -73,6 +156,23 @@
 .dir { color: #6B728E; font-weight: bold; }
 .file { color: #c4c6d4; margin: 2px;}
 
+.select-check {
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  border: 1px solid #50577A;
+  background: transparent;
+  cursor: pointer;
+  margin: 0 6px 0 4px;
+  flex-shrink: 0;
+
+  &:checked {
+    background: #6B728E;
+    border-color: #6B728E;
+  }
+}
+
+// ---- per-row "..." dropdown menu ----
 .dots {
   background: none;
   border: none;
@@ -128,6 +228,7 @@
   }
 }
 
+// ---- inline rename form (swapped in for a row's link) ----
 .rename-form {
   flex: 1;
   display: flex;
@@ -160,94 +261,3 @@
 
 .rename-confirm { color: #6B728E; }
 .rename-cancel { color: #f87171; }
-
-.error {
-  color: #f87171;
-  font-size: 0.9rem;
-
-  &::before { content: 'bash: '; color: #50577A; }
-}
-
-.upload-banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border-left: 2px solid #50577A;
-  padding: 5px 10px;
-  margin-bottom: 12px;
-  font-size: 0.85rem;
-  color: #6B728E;
-}
-
-.banner-label { color: #6B728E; }
-.banner-filename { color: #c4c6d4; }
-.error-text { color: #f87171; }
-
-.progress-bar {
-  flex: 1;
-  height: 2px;
-  background: #404258;
-}
-
-.progress-fill {
-  height: 100%;
-  background: #6B728E;
-  transition: width 0.1s;
-}
-
-.prompt-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-
-  form { display: contents; }
-}
-
-.delete-btn {
-  background: none;
-  color: #f87171;
-  font-family: inherit;
-  font-size: 0.85rem;
-  padding: 1px 10px;
-  cursor: pointer;
-  transition: background 0.1s, color 0.1s, border-color 0.1s;
-
-  &::before { content: '[ '; }
-  &::after  { content: ' ]'; }
-
-  &:hover {
-    background: #3a2a2a;
-    border-color: #f87171;
-    color: #f87171;
-  }
-}
-
-.select-check {
-  appearance: none;
-  width: 11px;
-  height: 11px;
-  border: 1px solid #50577A;
-  background: transparent;
-  cursor: pointer;
-  margin: 0 6px 0 4px;
-  flex-shrink: 0;
-
-  &:checked {
-    background: #6B728E;
-    border-color: #6B728E;
-  }
-}
-
-.row-selected { background: #272838; }
-
-.banner-dismiss {
-  background: none;
-  border: none;
-  color: #50577A;
-  font-family: inherit;
-  font-size: 0.85rem;
-  cursor: pointer;
-  padding: 0;
-
-  &:hover { color: #c4c6d4; }
-}
