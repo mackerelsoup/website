@@ -26,11 +26,26 @@ export class UploadManager {
 	savingIndex = $state(0);
 	savingTotal = $state(0);
 
+	//"paused" phase
+	controller = new AbortController()
+	paused = $state(false);
+	private pauseResolve: (() => void) | null = null;
+
 	dismissError() {
 		this.phase = 'idle';
 	}
 
-	// Remove: import { randomUUID } from 'crypto';
+	pause() {
+		this.paused = true;
+		this.controller.abort();
+	}
+
+	resume() {
+		this.paused = false;
+		this.controller = new AbortController();
+		this.pauseResolve?.();
+		this.pauseResolve = null;
+	}
 
 	generateUUID(): string {
 		if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -38,8 +53,8 @@ export class UploadManager {
 		}
 		//bc its not fuck ass https
 		return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-			const r = Math.random() * 16 | 0;
-			const v = c === 'x' ? r : (r & 0x3 | 0x8);
+			const r = (Math.random() * 16) | 0;
+			const v = c === 'x' ? r : (r & 0x3) | 0x8;
 			return v.toString(16);
 		});
 	}
@@ -123,9 +138,14 @@ export class UploadManager {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					uploadId, transferId, destPath, filename,
-					size: file.size, totalChunks: total,
-					fileIndex: f, totalFiles: fileList.length
+					uploadId,
+					transferId,
+					destPath,
+					filename,
+					size: file.size,
+					totalChunks: total,
+					fileIndex: f,
+					totalFiles: fileList.length
 				})
 			});
 
@@ -145,21 +165,38 @@ export class UploadManager {
 				if (have.has(i)) continue;
 				const blob = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
 				const params = new URLSearchParams({
-					transferId, index: String(i), uploadId,
-					fileIndex: String(f), totalFiles: String(fileList.length)
+					transferId,
+					index: String(i),
+					uploadId,
+					fileIndex: String(f),
+					totalFiles: String(fileList.length)
 				});
 
 				let sent = false;
 				for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
 					try {
-						const res = await fetch(`/cloud/files/upload/chunk?${params}`, { method: 'PUT', body: blob });
+						const res = await fetch(`/cloud/files/upload/chunk?${params}`, {
+							method: 'PUT',
+							body: blob,
+							signal: this.controller.signal
+						});
 						if (!res.ok) throw new Error(`HTTP ${res.status}`);
 						sent = true;
 						break;
-					} catch {
+					} catch (e) {
+						if (e instanceof DOMException && e.name === 'AbortError') {
+							break; //dont' retry, an intentional pause and caught with the use of the abort controller
+						}
 						if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, 500 * attempt));
 					}
 				}
+
+				if (this.paused) {
+					await new Promise<void>((resolve) => this.pauseResolve = resolve)
+					--i; //roll back the particular chunk
+					continue;
+				}
+
 
 				if (!sent) {
 					// don't silently drop the chunk and leave a half-written file — surface it

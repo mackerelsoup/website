@@ -94,12 +94,25 @@
 .upload-banner {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   border-left: 2px solid #50577A;
   padding: 5px 10px;
   margin-bottom: 12px;
   font-size: 0.85rem;
   color: #6B728E;
+}
+
+.pause-play-btn {
+    font-size: 1.4rem; // controls icon size
+    background: none;
+    border: none;
+    color: #6B728E;
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+
+    &:focus-visible { outline: 1px solid #6B728E; }
+    &:hover { background: #404258; color: #c4c6d4; }
 }
 
 .banner-label { color: #6B728E; }

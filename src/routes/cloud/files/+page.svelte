@@ -2,26 +2,54 @@
 	import './files.scss';
 	import type { PageProps } from './$types';
 	import { UploadManager } from './upload.svelte';
+	import IconPlay from '~icons/tdesign/play';
+	import IconPause from '~icons/gg/play-pause';
 
 	let { data }: PageProps = $props();
 
-	// --- dropdown "..." menu on each row ---
+	// --- navigation ---
+	// strips the last path segment to get the parent directory URL
+	function parentPath(path: string): string {
+		const parts = path.replace(/\/$/, '').split('/');
+		parts.pop();
+		return parts.join('/') || '/';
+	}
+
+	// --- dropdown "..." menu ---
 	let menuOpen = $state<string | null>(null);
 
-	// --- inline rename form, swapped in for a row's link when active ---
-	let renaming = $state<string | null>(null);
+	// opens the menu for a row, or closes it if already open
+	function toggleMenu(filename: string) {
+		menuOpen = menuOpen === filename ? null : filename;
+	}
+
+	// closes whatever menu is currently open (used by the background overlay)
+	function closeMenu() {
+		menuOpen = null;
+	}
+
+	// --- rename ---
+	let renaming = $state<string | null>(null); // filename of the row currently showing the rename input
 	let renameValue = $state('');
 
-	// --- multi-select mode (checkboxes + bulk delete) ---
+	// opens the inline rename form for a row
+	function startRename(filename: string, basename: string) {
+		menuOpen = null;
+		renaming = filename;
+		renameValue = basename;
+	}
+
+	// dismisses the rename form without submitting
+	function cancelRename() {
+		renaming = null;
+	}
+
+	// --- multi-select (checkboxes + bulk delete) ---
 	let selecting = $state(false);
 	let selected = $state(new Set<string>());
 	let lastSelectedIndex = $state<number | null>(null); // anchor for shift-click range select
 
-	// --- upload picker visibility (separate from the upload's own progress UI) ---
-	let uploading = $state(false);
-
-	const upload = new UploadManager();
-
+	// enters select mode and clears any previous selection
 	function enterSelect() {
 		selecting = true;
 		selected = new Set();
@@ -29,20 +57,14 @@
 		menuOpen = null;
 	}
 
+	// exits select mode and clears the selection
 	function exitSelect() {
 		selecting = false;
 		selected = new Set();
 		lastSelectedIndex = null;
 	}
 
-	function startUploading() {
-		uploading = true;
-	}
-
-	function stopUploading() {
-		uploading = false;
-	}
-
+	// toggles a single row; shift-click extends the selection from the last touched row
 	function toggleSelect(filename: string, index: number, shiftKey: boolean) {
 		const next = new Set(selected);
 		if (shiftKey && lastSelectedIndex !== null) {
@@ -62,39 +84,39 @@
 		selected = next;
 	}
 
+	// --- upload ---
+	let uploading = $state(false); // controls whether the file/folder picker buttons are shown
 	let fileInput: HTMLInputElement = $state()!;
 	let folderInput: HTMLInputElement = $state()!;
 
-	function triggerFolderUpload() {
-		folderInput.click();
+	const upload = new UploadManager();
+
+	// shows the upload picker buttons in the toolbar
+	function startUploading() {
+		uploading = true;
 	}
 
-	function parentPath(path: string): string {
-		const parts = path.replace(/\/$/, '').split('/');
-		parts.pop();
-		return parts.join('/') || '/';
+	// hides the upload picker buttons (e.g. on cancel or Escape)
+	function stopUploading() {
+		uploading = false;
 	}
 
-	function closeMenu() {
-		menuOpen = null;
-	}
-
-	function toggleMenu(filename: string) {
-		menuOpen = menuOpen === filename ? null : filename;
-	}
-
+	// opens the hidden <input type="file"> for individual files
 	function triggerUpload() {
 		fileInput.click();
 	}
 
-	function startRename(filename: string, basename: string) {
-		menuOpen = null;
-		renaming = filename;
-		renameValue = basename;
+	// opens the hidden <input type="file" webkitdirectory> for whole folders
+	function triggerFolderUpload() {
+		folderInput.click();
 	}
 
-	function cancelRename() {
-		renaming = null;
+	function triggerPause() {
+		upload.pause();
+	}
+
+	function triggerUnpause() {
+		upload.resume();
 	}
 </script>
 
@@ -176,15 +198,28 @@
 			{#if upload.phase !== 'idle'}
 				<div class="upload-banner">
 					{#if upload.phase === 'uploading'}
-						<span class="banner-label">uploading... {upload.percent}%</span>
-						<span class="banner-filename"
-							>{upload.uploadingFilename}{upload.uploadingTotal > 1
-								? ` (${upload.uploadingIndex}/${upload.uploadingTotal})`
-								: ''}</span
-						>
-						<div class="progress-bar">
-							<div class="progress-fill" style="width:{upload.percent}%"></div>
-						</div>
+						{#if upload.paused}
+							<span class="banner-label">Upload paused</span>
+							<div class="progress-bar">
+								<div class="progress-fill" style="width:{upload.percent}%"></div>
+							</div>
+							<button class="pause-play-btn" onclick={triggerUnpause}>
+								<IconPlay></IconPlay>
+							</button>
+						{:else}
+							<span class="banner-label">uploading... {upload.percent}%</span>
+							<span class="banner-filename"
+								>{upload.uploadingFilename}{upload.uploadingTotal > 1
+									? ` (${upload.uploadingIndex}/${upload.uploadingTotal})`
+									: ''}</span
+							>
+							<div class="progress-bar">
+								<div class="progress-fill" style="width:{upload.percent}%"></div>
+							</div>
+							<button class="pause-play-btn" onclick={triggerPause}>
+								<IconPause></IconPause>
+							</button>
+						{/if}
 					{:else if upload.phase === 'saving'}
 						<span class="banner-label">saving to cloud</span>
 						<span class="banner-filename"
