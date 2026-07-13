@@ -27,7 +27,7 @@ export class UploadManager {
 	savingTotal = $state(0);
 
 	//"paused" phase
-	controller = new AbortController()
+	controller = new AbortController();
 	paused = $state(false);
 	private pauseResolve: (() => void) | null = null;
 
@@ -178,7 +178,8 @@ export class UploadManager {
 						const res = await fetch(`/cloud/files/upload/chunk?${params}`, {
 							method: 'PUT',
 							body: blob,
-							signal: this.controller.signal
+							signal: this.controller.signal,
+							headers: { 'Content-Type': 'application/octet-stream' }
 						});
 						if (!res.ok) throw new Error(`HTTP ${res.status}`);
 						sent = true;
@@ -192,11 +193,10 @@ export class UploadManager {
 				}
 
 				if (this.paused) {
-					await new Promise<void>((resolve) => this.pauseResolve = resolve)
+					await new Promise<void>((resolve) => (this.pauseResolve = resolve));
 					--i; //roll back the particular chunk
 					continue;
 				}
-
 
 				if (!sent) {
 					// don't silently drop the chunk and leave a half-written file — surface it
