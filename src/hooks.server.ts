@@ -1,17 +1,49 @@
 import type { Handle } from '@sveltejs/kit';
-import { building } from '$app/environment';
-import { auth } from '$lib/server/auth';
-import { svelteKitHandler } from 'better-auth/svelte-kit';
+import { getDevices } from '$lib/tailscale';
+import { TAILSCALE_OAUTH_CLIENT, TAILSCALE_OAUTH_PASSWORD } from '$env/static/private';
 
-const handleBetterAuth: Handle = async ({ event, resolve }) => {
-	const session = await auth.api.getSession({ headers: event.request.headers });
+let cachedToken: { token: string; expiresAt: number } | null = null;
 
-	if (session) {
-		event.locals.session = session.session;
-		event.locals.user = session.user;
+async function getAccesesToken(): Promise<string> {
+	if (cachedToken && Date.now() < cachedToken.expiresAt) {
+		return cachedToken.token;
 	}
 
-	return svelteKitHandler({ event, resolve, auth, building });
-};
+	const res = await fetch('https://api.tailscale.com/api/v2/oauth/token', {
+		method: 'POST',
+		body: new URLSearchParams({
+			client_id: TAILSCALE_OAUTH_CLIENT,
+			client_secret: TAILSCALE_OAUTH_PASSWORD,
+			grant_type: 'client_credentials'
+		})
+	});
 
-export const handle: Handle = handleBetterAuth;
+	if (!res.ok) {
+		throw new Error(`Failed to fetch Tailscale OAuth token: ${res.status} ${await res.text()}`);
+	}
+
+	const data = await res.json();
+
+	cachedToken = {
+		token: data.access_token,
+		expiresAt: Date.now() + (data.expires_in - 60) * 1000
+	};
+
+	return cachedToken.token;
+}
+
+export const handle: Handle = async ({ event, resolve }) => {
+	await getAccesesToken();
+
+	const tailscaleUser = event.request.headers.get('Tailscale-User-Login');
+	const tailscaleName = event.request.headers.get('Tailscale-User-Name');
+
+	if (tailscaleUser) {
+		event.locals.tailscaleIdentity = {
+			login: tailscaleUser,
+			name: tailscaleName
+		};
+	}
+
+	return resolve(event);
+};

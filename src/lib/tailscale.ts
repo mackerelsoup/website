@@ -2,6 +2,7 @@ interface TailscaleDevice {
   name: string;
   addresses: string[];
   connectedToControl: boolean;
+  user: string;
 }
 
 export async function getOnlineStatus(token: string, deviceName: string): Promise<boolean> {
@@ -15,11 +16,13 @@ export async function getDevices(token: string): Promise<TailscaleDevice[]> {
   });
 
   const data = await response.json();
+
   return (data.devices as any[])
     .filter((device) => device.connectedToControl)
     .map((device) => ({
       name: device.name,
       addresses: device.addresses,
-      connectedToControl: device.connectedToControl
+      connectedToControl: device.connectedToControl,
+      user: device.user
     }));
 }
