@@ -14,7 +14,7 @@
 			no Tailscale identity was found on this request.
 		{/if}
 	</p>
-	<a class="back" href="/">← back to root</a>
+	<a class="back" href="/cloud">← back to root</a>
 </div>
 
 <style>
