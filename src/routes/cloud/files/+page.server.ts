@@ -1,9 +1,22 @@
-import { WEBDAV_PASSWORD, WEBDAV_URL } from "$env/static/private";
-import type { PageServerLoad, Actions } from "./$types";
-import { listDirectory, moveItem, deleteItem } from "$lib/webdav";
-import { redirect } from "@sveltejs/kit";
+import { WEBDAV_PASSWORD, WEBDAV_URL } from '$env/static/private';
+import type { PageServerLoad, Actions } from './$types';
+import { listDirectory, moveItem, deleteItem } from '$lib/webdav';
+import { redirect } from '@sveltejs/kit';
+import { hasAccess } from '$lib/server/permissions';
 
-const WEBDAV_USERNAME: string = 'homelab'
+const WEBDAV_USERNAME: string = 'homelab';
+
+/** Redirect to the no-access page for a denied path, carrying the path along for context. */
+function denyRedirect(path: string): never {
+	throw redirect(303, `/cloud/no-access?path=${encodeURIComponent(path)}`);
+}
+
+/** Require access to `path` for the current Tailscale identity, or bail out. */
+async function requireAccess(login: string | undefined | null, path: string) {
+	if (!(await hasAccess(login, path))) {
+		denyRedirect(path);
+	}
+}
 
 export const actions: Actions = {
 	rename: async ({ request }) => {
@@ -49,13 +62,17 @@ export const actions: Actions = {
 	}
 };
 
-export const load: PageServerLoad = async ({ url }) => {
-  const path = url.searchParams.get('path') ?? '/'
+export const load: PageServerLoad = async ({ url, locals }) => {
+	const path = url.searchParams.get('path') ?? '/';
 
-  try {
-    const contents = await listDirectory(WEBDAV_URL, WEBDAV_USERNAME, WEBDAV_PASSWORD, path)
-    return { files: contents, path }
-  } catch {
-    return { files: [], path, error: true }
-  }
-}
+	if (path != '/' && path != '/cloud') {
+		await requireAccess(locals.tailscaleIdentity?.login, path);
+	}
+
+	try {
+		const contents = await listDirectory(WEBDAV_URL, WEBDAV_USERNAME, WEBDAV_PASSWORD, path);
+		return { files: contents, path };
+	} catch {
+		return { files: [], path, error: true };
+	}
+};
