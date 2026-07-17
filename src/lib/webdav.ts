@@ -19,14 +19,33 @@ export async function writeFile(url: string, username: string, password: string,
   await client.putFileContents(path, content, { overwrite: true });
 }
 
-export async function deleteItem(url: string, username: string, password: string, path: string): Promise<void> {
+export async function deleteItem(url: string, username: string, password: string, path: string, isDirectory = false): Promise<void> {
   const client = getClient(url, username, password);
-  await client.deleteFile(path);
+  const target = isDirectory && !path.endsWith('/') ? `${path}/` : path
+  await client.deleteFile(target);
 }
 
-export async function moveItem(url: string, username: string, password: string, from: string, to: string): Promise<void> {
-  const client = getClient(url, username, password);
-  await client.moveFile(from, to);
+export async function moveItem(url: string, username: string, password: string, from: string, to: string, isDirectory = false): Promise<void> {
+  const fromPath = isDirectory && !from.endsWith('/') ? `${from}/` : from;
+  const toPath = isDirectory && !to.endsWith('/') ? `${to}/` : to;
+
+  const base = url.replace(/\/$/, ''); // strip trailing slash from WEBDAV_URL
+  const destBase = base.replace(/^https:/, 'http:'); // Apache expects http:// internally
+
+  const auth = Buffer.from(`${username}:${password}`).toString('base64');
+
+  const res = await fetch(`${base}${fromPath}`, {
+    method: 'MOVE',
+    headers: {
+      Authorization: `Basic ${auth}`,
+      Destination: `${destBase}${toPath}`,
+      Overwrite: 'F'
+    }
+  });
+
+  if (!res.ok) {
+    throw new Error(`Move failed: ${res.status} ${res.statusText}`);
+  }
 }
 
 export async function createDirectory(url: string, username: string, password: string, path: string): Promise<void> {
@@ -37,4 +56,5 @@ export async function createDirectory(url: string, username: string, password: s
 export async function exists(url: string, username: string, password: string, path: string): Promise<boolean> {
   const client = getClient(url, username, password);
   return client.exists(path);
+  
 }

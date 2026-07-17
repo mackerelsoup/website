@@ -152,6 +152,11 @@
 								<input type="hidden" name="returnPath" value={data.path} />
 								{#each [...selected] as path}
 									<input type="hidden" name="path" value={path} />
+									<input
+										type="hidden"
+										name="isDirectory"
+										value={data.files.find((f) => f.filename === path)?.type === 'directory'}
+									/>
 								{/each}
 								<button type="submit" class="delete-btn">delete ({selected.size})</button>
 							</form>
@@ -260,6 +265,7 @@
 					<form class="rename-form" method="POST" action="?/rename">
 						<input type="hidden" name="returnPath" value={data.path} />
 						<input type="hidden" name="path" value={file.filename} />
+						<input type="hidden" name="isDirectory" value={file.type === 'directory'} />
 						<input class="rename-input" name="newName" bind:value={renameValue} />
 						<button type="submit" class="rename-confirm">ok</button>
 						<button type="button" class="rename-cancel" onclick={cancelRename}>cancel</button>
@@ -297,6 +303,7 @@
 								<button onclick={() => startRename(file.filename, file.basename)}>rename</button>
 								<form method="POST" action="?/delete">
 									<input type="hidden" name="path" value={file.filename} />
+									<input type="hidden" name="isDirectory" value={file.type === 'directory'} />
 									<input type="hidden" name="returnPath" value={data.path} />
 									<button type="submit" class="delete">delete</button>
 								</form>
