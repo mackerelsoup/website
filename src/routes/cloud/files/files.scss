@@ -90,6 +90,26 @@
   }
 }
 
+// ---- disk space banner ----
+.disk-space-banner {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.disk-space-bar {
+  flex: 1;
+  height: 6px;
+  margin-right: 20px;
+  background: #404258;
+}
+
+.disk-space-fill {
+  height: 100%;
+  background: #6B728E;
+  transition: width 0.1s;
+}
+
 // ---- upload progress banner ----
 .upload-banner {
   display: flex;

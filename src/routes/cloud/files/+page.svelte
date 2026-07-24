@@ -4,8 +4,41 @@
 	import { UploadManager } from './upload.svelte';
 	import IconPlay from '~icons/tdesign/play';
 	import IconPause from '~icons/gg/play-pause';
+	import { onMount } from 'svelte';
 
 	let { data }: PageProps = $props();
+	// --- cloud disk space ---
+	let diskSpace = $state<{
+		totalBytes: number;
+		usedBytes: number;
+		freeBytes: number;
+		checkedAt: number;
+	} | null>(null);
+	let diskSpaceError = $state<string | null>(null);
+	let diskSpacePercent = $derived(
+		diskSpace ? Math.round((diskSpace.usedBytes / diskSpace.totalBytes) * 100) : 0
+	);
+
+	async function fetchDiskSpace() {
+		try {
+			const res = await fetch('https://homelab.tail3fdd8a.ts.net:8080/cloud/api/disk-space');
+			const body = await res.json();
+			if (!res.ok) {
+				diskSpaceError = body.error ?? `HTTP ${res.status}`;
+				return;
+			}
+			diskSpace = body;
+			diskSpaceError = null;
+		} catch (e) {
+			diskSpaceError = e instanceof Error ? e.message : String(e);
+		}
+	}
+
+	onMount(() => {
+		fetchDiskSpace();
+		const interval = setInterval(fetchDiskSpace, 60_000);
+		return () => clearInterval(interval);
+	});
 
 	// --- navigation ---
 	// strips the last path segment to get the parent directory URL
@@ -199,6 +232,17 @@
 				}}
 				style="display:none"
 			/>
+
+			<div class="disk-space-banner">
+				{#if !diskSpaceError}
+					<div class="disk-space-bar">
+						<div class="disk-space-fill" style="width:{diskSpacePercent}%"></div>
+					</div>
+					<span class="disk-space-used">{diskSpacePercent}% used</span>
+				{:else}
+					<div>{diskSpaceError}</div>
+				{/if}
+			</div>
 
 			{#if upload.phase !== 'idle'}
 				<div class="upload-banner">
