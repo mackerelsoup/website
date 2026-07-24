@@ -2,7 +2,7 @@
 
 import { db } from '$lib/server/db';
 import { folderPermission, folder } from '$lib/server/db/schema';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 /**
  * Hardcoded admin allowlist for the /cloud/admin/permissions UI.
@@ -39,8 +39,9 @@ function pathCovers(granted: string, target: string): boolean {
 export interface FolderPermissionRow {
 	id: number;
 	folderId: number;
-	tailscaleLogin: string;
+	tailscaleLogin: string | null;
 	createdAt: Date;
+	access: string | null;
 }
 
 export interface FolderRow {
@@ -56,6 +57,35 @@ export async function listPermissions(): Promise<FolderPermissionRow[]> {
 		orderBy: (t, { desc }) => [desc(t.createdAt)]
 	});
 }
+
+//** List view only permissions, common folders which have view access only*/
+export async function listViewOnlyPermissions(): Promise<FolderPermissionRow[]> {
+	return db.query.folderPermission.findMany({
+		where: and(isNull(folderPermission.tailscaleLogin), eq(folderPermission.access, 'view')) 
+	});
+}
+
+//** Get the access level for a particular `login` and `path` */
+export async function getAccessLevel(login: string | undefined | null, path: string): Promise<string|null> {
+	if (!login) return null
+
+	//Admins will have edit powers for all folders
+	if (isAdmin(login)) {
+		return 'edit'
+	}
+	
+	const requestFolder = normalizePath(path);
+
+	const viewOnlyFoldersPermissions = await listViewOnlyPermissions();
+	const viewOnlyFolderIds = viewOnlyFoldersPermissions.map((viewOnlyFoldersPermissions) => viewOnlyFoldersPermissions.folderId);
+	const viewOnlyFolders = await db.query.folder.findMany({
+		where: inArray(folder.id, viewOnlyFolderIds)
+	})
+
+	if (viewOnlyFolders.some((folder) => folder.path == requestFolder)) {
+		return 'view';
+	}
+} 
 
 /**
  * Does `login` have access to `path`? Access is granted if there is any permission row
@@ -98,7 +128,7 @@ export async function grantAccess(folderPath: string, tailscaleLogin: string): P
 
 	await db
 		.insert(folderPermission)
-		.values({ folderId: folderRow.id, tailscaleLogin: login })
+		.values({ folderId: folderRow.id, tailscaleLogin: login, access: 'view' })
 		.onConflictDoNothing();
 }
 

@@ -12,6 +12,7 @@ export const folder = pgTable('folder', {
 export const folderPermission = pgTable('folder_permission', {
   id: serial('id').primaryKey(),
   folderId: integer('folder_id').notNull().references(() => folder.id, { onDelete: 'cascade' }),
-  tailscaleLogin: text('tailscale_login').notNull(),
-  createdAt: timestamp('created_at').notNull().defaultNow()
+  tailscaleLogin: text('tailscale_login'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  access: text('access').notNull()
 }, (t) => [unique().on(t.folderId, t.tailscaleLogin)]);
