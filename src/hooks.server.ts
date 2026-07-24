@@ -1,6 +1,6 @@
 import type { Handle } from '@sveltejs/kit';
-import { getDevices } from '$lib/tailscale';
 import { TAILSCALE_OAUTH_CLIENT, TAILSCALE_OAUTH_PASSWORD } from '$env/static/private';
+import '$lib/server/disk-space'
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
@@ -43,6 +43,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 			login: tailscaleUser,
 			name: tailscaleName
 		};
+	}
+
+	event.locals.tailscaleIdentity = {
+		login: "mackerelsoup@github",
+		name : "fucking billy"
 	}
 
 	return resolve(event);
