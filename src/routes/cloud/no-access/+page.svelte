@@ -14,7 +14,11 @@
 			no Tailscale identity was found on this request.
 		{/if}
 	</p>
-	<a class="back" href="/cloud">← back to root</a>
+	{#if typeof window !== 'undefined' && window.history.length > 1}
+		<button class="back" onclick={() => window.history.back()}>← back</button>
+	{:else}
+		<a class="back" href="/cloud">← back to root</a>
+	{/if}
 </div>
 
 <style>
@@ -70,9 +74,14 @@
 	}
 
 	.back {
+		background: none;
+		border: none;
+		padding: 0;
 		color: #6b728e;
 		text-decoration: none;
+		font-family: inherit;
 		font-size: 0.85rem;
+		cursor: pointer;
 
 		&:hover {
 			color: #c4c6d4;
