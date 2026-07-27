@@ -72,6 +72,7 @@ export class UploadManager {
 
 		const es = new EventSource(`/cloud/files/upload-progress?id=${uploadId}`);
 
+		//right now this is purely cosmetic
 		const drainQueue = async () => {
 			if (!allChunksSent || draining) return;
 			draining = true;
