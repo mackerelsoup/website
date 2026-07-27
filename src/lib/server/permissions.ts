@@ -10,7 +10,7 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
  * (No roles table yet — see ARCHITECTURE.md known gaps. Revisit if more admins are needed.)
  */
 const ADMIN_LOGINS = new Set<string>([
-	// 'mackerelsoup@github'
+	//'mackerelsoup@github'
 ]);
 
 export function isAdmin(login: string | undefined | null): boolean {
@@ -59,33 +59,70 @@ export async function listPermissions(): Promise<FolderPermissionRow[]> {
 }
 
 //** List view only permissions, common folders which have view access only*/
-export async function listViewOnlyPermissions(): Promise<FolderPermissionRow[]> {
+export async function listGeneralViewOnlyFolders(): Promise<FolderPermissionRow[]> {
 	return db.query.folderPermission.findMany({
 		where: and(isNull(folderPermission.tailscaleLogin), eq(folderPermission.access, 'view')) 
 	});
 }
 
+/** Higher number wins when multiple grants cover the same folder at the same specificity. */
+const ACCESS_RANK: Record<string, number> = { edit: 2, view: 1 };
+
 //** Get the access level for a particular `login` and `path` */
-export async function getAccessLevel(login: string | undefined | null, path: string): Promise<string|null> {
+export async function getAccessLevel(login: string | undefined | null, path: string): Promise<string | null> {
 	if (!login) return null
 
 	//Admins will have edit powers for all folders
 	if (isAdmin(login)) {
 		return 'edit'
 	}
-	
+
 	const requestFolder = normalizePath(path);
 
-	const viewOnlyFoldersPermissions = await listViewOnlyPermissions();
-	const viewOnlyFolderIds = viewOnlyFoldersPermissions.map((viewOnlyFoldersPermissions) => viewOnlyFoldersPermissions.folderId);
-	const viewOnlyFolders = await db.query.folder.findMany({
-		where: inArray(folder.id, viewOnlyFolderIds)
-	})
+	const personalGrants = await db.query.folderPermission.findMany({
+		where: eq(folderPermission.tailscaleLogin, login)
+	});
+	const generalGrants = await listGeneralViewOnlyFolders();
 
-	if (viewOnlyFolders.some((folder) => folder.path == requestFolder)) {
-		return 'view';
+	const relevantGrants = [...personalGrants, ...generalGrants];
+	if (relevantGrants.length === 0) return null;
+
+	// General grants only apply to the exact folder they're on, they don't cascade to
+	// subfolders (e.g. a general view grant on '/cloud' doesn't cover '/cloud/temp').
+	// Personal grants keep the ancestor-covers-descendant behavior.
+	const generalGrantIds = new Set(generalGrants.map((grant) => grant.id));
+
+	const folders = await db.query.folder.findMany({
+		where: inArray(folder.id, relevantGrants.map((grant) => grant.folderId))
+	});
+	const folderPathById = new Map(folders.map((f) => [f.id, normalizePath(f.path)]));
+
+	// Prefer the most specific covering folder (longest path); break ties by access rank.
+	// Eg. /cloud is 'view' only but 'xxx' has 'edit' access on cloud
+	let best: { path: string; access: string } | null = null;
+	for (const grant of relevantGrants) {
+		const folderPath = folderPathById.get(grant.folderId);
+		if (!folderPath || !grant.access) continue;
+
+		const matches = generalGrantIds.has(grant.id)
+			? folderPath === requestFolder
+			: pathCovers(folderPath, requestFolder);
+		if (!matches) continue;
+
+		//the reason why the folder can be checked by length is because
+		const isMoreSpecific = !best || folderPath.length > best.path.length;
+		const isSameSpecificityHigherRank =
+			best &&
+			folderPath.length === best.path.length &&
+			(ACCESS_RANK[grant.access] ?? 0) > (ACCESS_RANK[best.access] ?? 0);
+
+		if (isMoreSpecific || isSameSpecificityHigherRank) {
+			best = { path: folderPath, access: grant.access };
+		}
 	}
-} 
+
+	return best?.access ?? null;
+}
 
 /**
  * Does `login` have access to `path`? Access is granted if there is any permission row

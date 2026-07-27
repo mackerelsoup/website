@@ -5,7 +5,7 @@ import {
 import { createUploadSession, cleanupStaleSessions } from '$lib/server/upload-state'
 import { finalizeFile } from '$lib/server/finalize-upload'
 import { resolveUploadPath } from '$lib/server/safe-path'
-import { hasAccess } from '$lib/server/permissions'
+import { getAccessLevel } from '$lib/server/permissions'
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	await cleanupStaleTransfers()
@@ -18,7 +18,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return new Response('Invalid path', { status: 400 })
 	}
 
-	if (!(await hasAccess(locals.tailscaleIdentity?.login, destPath))) {
+	if (await getAccessLevel(locals.tailscaleIdentity?.login, destPath) != 'edit') {
 		return new Response('Forbidden', { status: 403 })
 	}
 

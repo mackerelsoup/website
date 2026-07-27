@@ -18,6 +18,9 @@
 	let diskSpacePercent = $derived(
 		diskSpace ? Math.round((diskSpace.usedBytes / diskSpace.totalBytes) * 100) : 0
 	);
+	let diskSpaceStatus = $derived(
+		diskSpacePercent < 60 ? 'healthy' : diskSpacePercent < 85 ? 'warning' : 'critical'
+	);
 
 	async function fetchDiskSpace() {
 		try {
@@ -177,32 +180,48 @@
 				<div>
 					<span class="prompt-user">zt@homelab:</span><span class="prompt-path">{data.path}</span>
 				</div>
-				<div class="prompt-actions">
-					{#if selecting}
-						<button type="button" class="upload-btn" onclick={exitSelect}>cancel</button>
-						{#if selected.size > 0}
-							<form method="POST" action="?/deleteMany">
-								<input type="hidden" name="returnPath" value={data.path} />
-								{#each [...selected] as path}
-									<input type="hidden" name="path" value={path} />
-									<input
-										type="hidden"
-										name="isDirectory"
-										value={data.files.find((f) => f.filename === path)?.type === 'directory'}
-									/>
-								{/each}
-								<button type="submit" class="delete-btn">delete ({selected.size})</button>
-							</form>
+				{#if data.accessLevel === 'edit'}
+					<div class="prompt-actions">
+						{#if selecting}
+							<button type="button" class="upload-btn" onclick={exitSelect}>cancel</button>
+							{#if selected.size > 0}
+								<form method="POST" action="?/deleteMany">
+									<input type="hidden" name="returnPath" value={data.path} />
+									{#each [...selected] as path}
+										<input type="hidden" name="path" value={path} />
+										<input
+											type="hidden"
+											name="isDirectory"
+											value={data.files.find((f) => f.filename === path)?.type === 'directory'}
+										/>
+									{/each}
+									<button type="submit" class="delete-btn">delete ({selected.size})</button>
+								</form>
+							{/if}
+						{:else if uploading}
+							<button type="button" class="upload-btn" onclick={stopUploading}>cancel</button>
+							<button class="upload-btn" type="button" onclick={triggerFolderUpload}>folder</button>
+							<button class="upload-btn" type="button" onclick={triggerUpload}>files</button>
+						{:else}
+							<button type="button" class="upload-btn" onclick={enterSelect}>select</button>
+							<button type="button" class="upload-btn" onclick={startUploading}>upload</button>
 						{/if}
-					{:else if uploading}
-						<button type="button" class="upload-btn" onclick={stopUploading}>cancel</button>
-						<button class="upload-btn" type="button" onclick={triggerFolderUpload}>folder</button>
-						<button class="upload-btn" type="button" onclick={triggerUpload}>files</button>
-					{:else}
-						<button type="button" class="upload-btn" onclick={enterSelect}>select</button>
-						<button type="button" class="upload-btn" onclick={startUploading}>upload</button>
-					{/if}
-				</div>
+					</div>
+				{/if}
+			</div>
+
+			<div class="disk-space-banner">
+				{#if !diskSpaceError}
+					<div class="disk-space-bar">
+						<div
+							class="disk-space-fill {diskSpaceStatus}"
+							style="width:{diskSpacePercent}%"
+						></div>
+					</div>
+					<span class="disk-space-used {diskSpaceStatus}">{diskSpacePercent}% used</span>
+				{:else}
+					<div>{diskSpaceError}</div>
+				{/if}
 			</div>
 
 			<input
@@ -232,17 +251,6 @@
 				}}
 				style="display:none"
 			/>
-
-			<div class="disk-space-banner">
-				{#if !diskSpaceError}
-					<div class="disk-space-bar">
-						<div class="disk-space-fill" style="width:{diskSpacePercent}%"></div>
-					</div>
-					<span class="disk-space-used">{diskSpacePercent}% used</span>
-				{:else}
-					<div>{diskSpaceError}</div>
-				{/if}
-			</div>
 
 			{#if upload.phase !== 'idle'}
 				<div class="upload-banner">
