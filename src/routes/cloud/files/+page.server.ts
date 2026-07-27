@@ -84,7 +84,6 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const path = url.searchParams.get('path') ?? '/';
 
 	const accessLevel = await getAccessLevel(locals.tailscaleIdentity?.login, path)
-	console.log(accessLevel)
 	if (!accessLevel) {
 		denyRedirect(path)
 	}
