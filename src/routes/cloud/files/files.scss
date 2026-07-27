@@ -37,7 +37,7 @@
 	align-items: center;
 	row-gap: 8px;
 	font-size: 0.95rem;
-	margin-bottom: 4px;
+	margin-bottom: 8px;
 	user-select: none;
 }
 
@@ -122,30 +122,33 @@
 	display: flex;
 	flex: 1;
 	align-items: center;
+	margin-bottom: 8px;
 }
 
 .disk-space-bar {
 	flex: 1;
 	height: 6px;
 	margin-right: 10px;
+	border-radius: 75px;
 	background: #404258;
 }
 
 .disk-space-fill {
 	height: 100%;
 	background: #6b728e;
+	border-radius: 75px;
 	transition:
 		width 0.1s,
 		background 0.1s;
 
 	&.healthy {
-		background: #424028;
+		background: #7a9e7e;
 	}
 	&.warning {
-		background: #423b28;
+		background: #c9a15a;
 	}
 	&.critical {
-		background: #231d2d;
+		background: #c9636f;
 	}
 }
 
