@@ -4,7 +4,7 @@ import '$lib/server/disk-space'
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
-async function getAccesesToken(): Promise<string> {
+async function getAccessToken(): Promise<string> {
 	if (cachedToken && Date.now() < cachedToken.expiresAt) {
 		return cachedToken.token;
 	}
@@ -33,7 +33,7 @@ async function getAccesesToken(): Promise<string> {
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
-	await getAccesesToken();
+	//await getAccessToken();
 
 	const tailscaleUser = event.request.headers.get('Tailscale-User-Login');
 	const tailscaleName = event.request.headers.get('Tailscale-User-Name');
