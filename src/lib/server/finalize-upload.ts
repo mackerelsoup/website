@@ -4,7 +4,7 @@ import {
 	type ChunkTransfer,
 	claimFinalize,
 	markDone,
-	assembleToStream
+	streamChunksInOrder
 } from '$lib/server/chunk-transfer';
 import { emitUploadEvent } from '$lib/server/upload-state';
 
@@ -39,7 +39,7 @@ export async function finalizeFile(t: ChunkTransfer, ctx: FinalizeCtx): Promise<
 			WEBDAV_USERNAME,
 			WEBDAV_PASSWORD,
 			uploadPath,
-			await assembleToStream(t),
+			streamChunksInOrder(t),
 			(written) => {
 				const now = Date.now();
 				if (now - lastEmit > 250 || written >= t.size) {

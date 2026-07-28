@@ -1,8 +1,9 @@
-import { mkdir, writeFile, readFile, readdir, rm, rename } from 'node:fs/promises'
+import { mkdir, writeFile, readFile, readdir, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createReadStream } from 'node:fs'
+import { Readable } from 'node:stream'
 
 const ROOT = join(tmpdir(), 'cloud-uploads')
 
@@ -77,19 +78,20 @@ export async function assemble(t: ChunkTransfer): Promise<Buffer> {
 	return Buffer.concat(parts)
 }
 
-// concatenate chunk.0..chunk.{n-1} in order → single file on disk, return a read stream
-export async function assembleToStream(t: ChunkTransfer): Promise<import('node:fs').ReadStream> {
-	const outPath = join(t.dir, '_assembled')
-	const out = await import('node:fs').then(fs => fs.promises.open(outPath, 'w'))
-	try {
+// stream chunk.0..chunk.{n-1} in order, reading directly off disk —
+// no combined file is ever written; bytes flow straight through to the caller.
+export function streamChunksInOrder(t: ChunkTransfer): Readable {
+	async function* chunks() {
 		for (let i = 0; i < t.totalChunks; i++) {
-			const data = await readFile(join(t.dir, `chunk.${i}`))
-			await out.write(data)
+			for await (const piece of createReadStream(join(t.dir, `chunk.${i}`))) {
+				yield piece
+			}
 		}
-	} finally {
-		await out.close()
 	}
-	return createReadStream(outPath)
+	// Readable.from defaults to objectMode: true even when the generator yields
+	// Buffers — that breaks fetch's handling of the stream as a binary body, so
+	// force it off explicitly.
+	return Readable.from(chunks(), { objectMode: false })
 }
 
 // claim the exclusive right to finalize; sync check-and-set is atomic under
