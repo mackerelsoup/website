@@ -22,6 +22,18 @@
 		diskSpacePercent < 60 ? 'healthy' : diskSpacePercent < 85 ? 'warning' : 'critical'
 	);
 
+	function formatBytes(bytes: number): string {
+		if (bytes < 1024) return `${bytes}B`;
+		const units = ['KB', 'MB', 'GB', 'TB'];
+		let value = bytes / 1024;
+		let unitIndex = 0;
+		while (value >= 1024 && unitIndex < units.length - 1) {
+			value /= 1024;
+			unitIndex++;
+		}
+		return `${value.toFixed(1)}${units[unitIndex]}`;
+	}
+
 	async function fetchDiskSpace() {
 		try {
 			const res = await fetch('https://homelab.tail3fdd8a.ts.net:8080/cloud/api/disk-space');
@@ -213,10 +225,7 @@
 			<div class="disk-space-banner">
 				{#if !diskSpaceError}
 					<div class="disk-space-bar">
-						<div
-							class="disk-space-fill {diskSpaceStatus}"
-							style="width:{diskSpacePercent}%"
-						></div>
+						<div class="disk-space-fill {diskSpaceStatus}" style="width:{diskSpacePercent}%"></div>
 					</div>
 					<span class="disk-space-used {diskSpaceStatus}">{diskSpacePercent}% used</span>
 				{:else}
@@ -278,12 +287,19 @@
 							</button>
 						{/if}
 					{:else if upload.phase === 'saving'}
-						<span class="banner-label">saving to cloud</span>
+						{@const savingPercent =
+							upload.savingTotal > 0
+								? Math.round((upload.savingWritten / upload.savingTotal) * 100)
+								: 0}
+						<span class="banner-label">saving to cloud... {savingPercent}%</span>
 						<span class="banner-filename"
-							>{upload.savingFilename}{upload.savingTotal > 1
-								? ` (${upload.savingIndex}/${upload.savingTotal})`
+							>{upload.savingFilename}{upload.savingTotal > 0
+								? ` (${formatBytes(upload.savingWritten)}/${formatBytes(upload.savingTotal)})`
 								: ''}</span
 						>
+						<div class="progress-bar">
+							<div class="progress-fill" style="width:{savingPercent}%"></div>
+						</div>
 					{:else if upload.phase === 'done'}
 						<span class="banner-label">done</span>
 					{:else if upload.phase === 'error'}

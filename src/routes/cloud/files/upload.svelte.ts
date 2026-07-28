@@ -22,8 +22,7 @@ export class UploadManager {
 
 	// "saving" phase — server-driven, reported over SSE once all chunks land
 	savingFilename = $state('');
-	savingStatus = $state<'saving' | 'saved'>('saving');
-	savingIndex = $state(0);
+	savingWritten = $state(0);
 	savingTotal = $state(0);
 
 	//"paused" phase
@@ -63,43 +62,8 @@ export class UploadManager {
 		const uploadId = this.generateUUID(); // ephemeral, SSE-only — not the transferId
 		const fileList = [...files];
 
-		// saving/saved/complete arrive in real time over SSE, often while later files
-		// are still uploading — queue them and only replay once every chunk is sent,
-		// so the UI shows one phase at a time instead of interleaving.
-		let allChunksSent = false;
-		const eventQueue: any[] = [];
-		let draining = false;
-
+		// this comment needs to be updated
 		const es = new EventSource(`/cloud/files/upload-progress?id=${uploadId}`);
-
-		//right now this is purely cosmetic
-		const drainQueue = async () => {
-			if (!allChunksSent || draining) return;
-			draining = true;
-			while (eventQueue.length > 0) {
-				const ev = eventQueue.shift();
-				if (ev.type === 'saving') {
-					this.phase = 'saving';
-					this.savingStatus = 'saving';
-					this.savingFilename = ev.filename;
-					this.savingIndex = ev.index + 1;
-					this.savingTotal = ev.total;
-					await new Promise((r) => setTimeout(r, 300));
-				} else if (ev.type === 'saved') {
-					this.savingStatus = 'saved';
-					this.savingFilename = ev.filename;
-					await new Promise((r) => setTimeout(r, 100));
-				} else if (ev.type === 'complete') {
-					this.phase = 'done';
-					es.close();
-					setTimeout(() => {
-						this.phase = 'idle';
-						invalidateAll();
-					}, 1200);
-				}
-			}
-			draining = false;
-		};
 
 		es.onmessage = (e) => {
 			const ev = JSON.parse(e.data);
@@ -108,15 +72,23 @@ export class UploadManager {
 				this.error = ev.message;
 				es.close();
 				return;
-			}
-			if (ev.type === 'complete') {
+			} else if (ev.type === 'saving') {
+				this.phase = 'saving';
+				this.savingFilename = ev.filename;
+				this.savingWritten = ev.written;
+				this.savingTotal = ev.total;
+			} 
+			else if (ev.type === 'complete') {
 				// close as soon as the server signals completion — waiting for drainQueue's
 				// animation delay leaves the connection open after the server ends the stream,
 				// which makes EventSource auto-reconnect and replay the whole event history
-				es.close();
+				this.phase = 'done';
+					es.close();
+					setTimeout(() => {
+						this.phase = 'idle';
+						invalidateAll();
+					}, 1200);
 			}
-			eventQueue.push(ev);
-			drainQueue();
 		};
 
 		this.phase = 'uploading';
@@ -211,9 +183,5 @@ export class UploadManager {
 				this.percent = Math.round((confirmed / total) * 100);
 			}
 		}
-
-		// every file's chunks are on the server — safe to start showing save progress
-		allChunksSent = true;
-		drainQueue();
 	}
 }

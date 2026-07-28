@@ -1,8 +1,7 @@
 import { EventEmitter } from 'node:events'
 
 export type UploadEvent =
-	| { type: 'saving'; filename: string; index: number; total: number }
-	| { type: 'saved'; filename: string }
+	| { type: 'saving'; filename: string; written: number; total: number }
 	| { type: 'complete' }
 	| { type: 'error'; message: string }
 

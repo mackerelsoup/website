@@ -1,14 +1,19 @@
-import { WEBDAV_PASSWORD, WEBDAV_URL } from '$env/static/private'
-import { writeFile, createDirectory } from '$lib/webdav'
-import { type ChunkTransfer, claimFinalize, assemble, markDone } from '$lib/server/chunk-transfer'
-import { emitUploadEvent } from '$lib/server/upload-state'
+import { WEBDAV_PASSWORD, WEBDAV_URL } from '$env/static/private';
+import { createDirectory, writeFileStream } from '$lib/webdav';
+import {
+	type ChunkTransfer,
+	claimFinalize,
+	markDone,
+	assembleToStream
+} from '$lib/server/chunk-transfer';
+import { emitUploadEvent } from '$lib/server/upload-state';
 
-const WEBDAV_USERNAME = 'homelab'
+const WEBDAV_USERNAME = 'homelab';
 
 interface FinalizeCtx {
-	uploadId: string
-	fileIndex: number
-	totalFiles: number
+	uploadId: string;
+	fileIndex: number;
+	totalFiles: number;
 }
 
 /**
@@ -18,31 +23,45 @@ interface FinalizeCtx {
  * back into the route (which would 500 and leave the client retrying blindly).
  */
 export async function finalizeFile(t: ChunkTransfer, ctx: FinalizeCtx): Promise<void> {
-	if (!claimFinalize(t)) return // someone else already finalized / is finalizing
+	if (!claimFinalize(t)) return; // someone else already finalized / is finalizing
 
 	try {
-		emitUploadEvent(ctx.uploadId, {
-			type: 'saving', filename: t.filename, index: ctx.fileIndex, total: ctx.totalFiles
-		})
-
-		const dir = t.destPath.replace(/\/$/, '')
-		const uploadPath = `${dir}/${t.filename}`
-		const parentDir = uploadPath.substring(0, uploadPath.lastIndexOf('/'))
+		const dir = t.destPath.replace(/\/$/, '');
+		const uploadPath = `${dir}/${t.filename}`;
+		const parentDir = uploadPath.substring(0, uploadPath.lastIndexOf('/'));
 		if (parentDir !== dir) {
-			await createDirectory(WEBDAV_URL, WEBDAV_USERNAME, WEBDAV_PASSWORD, parentDir)
+			await createDirectory(WEBDAV_URL, WEBDAV_USERNAME, WEBDAV_PASSWORD, parentDir);
 		}
 
-		await writeFile(WEBDAV_URL, WEBDAV_USERNAME, WEBDAV_PASSWORD, uploadPath, await assemble(t))
+		let lastEmit = 0;
+		await writeFileStream(
+			WEBDAV_URL,
+			WEBDAV_USERNAME,
+			WEBDAV_PASSWORD,
+			uploadPath,
+			await assembleToStream(t),
+			(written) => {
+				const now = Date.now();
+				if (now - lastEmit > 250 || written >= t.size) {
+					lastEmit = now;
+					emitUploadEvent(ctx.uploadId, {
+						type: 'saving',
+						filename: t.filename,
+						written: written,
+						total: t.size
+					});
+				}
+			}
+		);
 
-		emitUploadEvent(ctx.uploadId, { type: 'saved', filename: t.filename })
-		await markDone(t) // frees chunk files but keeps the record for late duplicates
+		await markDone(t); // frees chunk files but keeps the record for late duplicates
 
 		if (ctx.fileIndex === ctx.totalFiles - 1) {
-			emitUploadEvent(ctx.uploadId, { type: 'complete' })
+			emitUploadEvent(ctx.uploadId, { type: 'complete' });
 		}
 	} catch (e) {
-		t.finalizing = false // release so a genuine retry could try again
-		emitUploadEvent(ctx.uploadId, { type: 'error', message: 'failed to save file' })
-		console.error('[finalize] failed:', e)
+		t.finalizing = false; // release so a genuine retry could try again
+		emitUploadEvent(ctx.uploadId, { type: 'error', message: 'failed to save file' });
+		console.error('[finalize] failed:', e);
 	}
 }

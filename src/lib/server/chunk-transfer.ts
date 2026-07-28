@@ -1,7 +1,8 @@
-import { mkdir, writeFile, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { mkdir, writeFile, readFile, readdir, rm, rename } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createReadStream } from 'node:fs'
 
 const ROOT = join(tmpdir(), 'cloud-uploads')
 
@@ -74,6 +75,21 @@ export async function assemble(t: ChunkTransfer): Promise<Buffer> {
 		parts.push(await readFile(join(t.dir, `chunk.${i}`)))
 	}
 	return Buffer.concat(parts)
+}
+
+// concatenate chunk.0..chunk.{n-1} in order → single file on disk, return a read stream
+export async function assembleToStream(t: ChunkTransfer): Promise<import('node:fs').ReadStream> {
+	const outPath = join(t.dir, '_assembled')
+	const out = await import('node:fs').then(fs => fs.promises.open(outPath, 'w'))
+	try {
+		for (let i = 0; i < t.totalChunks; i++) {
+			const data = await readFile(join(t.dir, `chunk.${i}`))
+			await out.write(data)
+		}
+	} finally {
+		await out.close()
+	}
+	return createReadStream(outPath)
 }
 
 // claim the exclusive right to finalize; sync check-and-set is atomic under

@@ -38,6 +38,8 @@ export const PUT: RequestHandler = async ({ request, url, locals }) => {
 	}
 
 	let finalized = false
+	// the last chunk will go through this process
+	// this means that the last chunk will take longer as it waits for the file to finalize
 	if (await isComplete(transfer)) {
 		finalized = true
 		await finalizeFile(transfer, { uploadId, fileIndex, totalFiles })
