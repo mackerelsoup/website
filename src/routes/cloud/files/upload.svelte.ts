@@ -77,7 +77,7 @@ export class UploadManager {
 				this.savingFilename = ev.filename;
 				this.savingWritten = ev.written;
 				this.savingTotal = ev.total;
-			} 
+			}
 			else if (ev.type === 'complete') {
 				// close as soon as the server signals completion — waiting for drainQueue's
 				// animation delay leaves the connection open after the server ends the stream,
@@ -99,6 +99,7 @@ export class UploadManager {
 		for (let f = 0; f < fileList.length; f++) {
 			const file = fileList[f];
 			const filename = useRelativePaths ? file.webkitRelativePath || file.name : file.name;
+			this.phase = 'uploading';
 			this.uploadingFilename = filename;
 			this.uploadingIndex = f + 1;
 			this.percent = 0;
