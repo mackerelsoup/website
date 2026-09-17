@@ -3,6 +3,9 @@
 import { db } from '$lib/server/db';
 import { folderPermission, folder } from '$lib/server/db/schema';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { normalizePath } from '$lib/server/path-utils';
+
+export { normalizePath };
 
 /**
  * Hardcoded admin allowlist for the /cloud/admin/permissions UI.
@@ -16,14 +19,6 @@ const ADMIN_LOGINS = new Set<string>([
 export function isAdmin(login: string | undefined | null): boolean {
 	if (!login) return false;
 	return ADMIN_LOGINS.has(login);
-}
-
-/** Normalize a WebDAV-style path: leading slash, no trailing slash (except root itself). */
-export function normalizePath(path: string): string {
-	let p = path.trim();
-	if (!p.startsWith('/')) p = `/${p}`;
-	if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
-	return p || '/';
 }
 
 /**
