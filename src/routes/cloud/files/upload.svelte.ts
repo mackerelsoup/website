@@ -60,10 +60,27 @@ export class UploadManager {
 
 	async start(destPath: string, files: FileList, useRelativePaths = false) {
 		const uploadId = this.generateUUID(); // ephemeral, SSE-only — not the transferId
-		const fileList = [...files];
-
 		// this comment needs to be updated
 		const es = new EventSource(`/cloud/files/upload-progress?id=${uploadId}`);
+		try {
+			await this.run(uploadId, es, destPath, files, useRelativePaths);
+		} catch (e) {
+			// callers fire this off without awaiting it — an uncaught throw here would
+			// otherwise vanish as an unhandled rejection and leave the UI stuck "uploading"
+			this.phase = 'error';
+			this.error = e instanceof Error ? e.message : 'Upload failed';
+			es.close();
+		}
+	}
+
+	private async run(
+		uploadId: string,
+		es: EventSource,
+		destPath: string,
+		files: FileList,
+		useRelativePaths: boolean
+	) {
+		const fileList = [...files];
 
 		es.onmessage = (e) => {
 			const ev = JSON.parse(e.data);
@@ -122,6 +139,13 @@ export class UploadManager {
 					totalFiles: fileList.length
 				})
 			});
+
+			if (!initRes.ok) {
+				this.phase = 'error';
+				this.error = `Upload failed: could not start ${filename} (HTTP ${initRes.status})`;
+				es.close();
+				return;
+			}
 
 			const init = await initRes.json();
 			if (init.done) {
