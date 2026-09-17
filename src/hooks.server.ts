@@ -43,11 +43,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 			login: tailscaleUser,
 			name: tailscaleName
 		};
-	}
-
-	event.locals.tailscaleIdentity = {
-		login: "mackerelsoup@github",
-		name : "fucking billy"
+	} else {
+		event.locals.tailscaleIdentity = {
+			login: "mackerelsoup@github",
+			name: "fucking billy"
+		};
 	}
 
 	return resolve(event);
