@@ -6,7 +6,7 @@
 	import IconPause from '~icons/gg/play-pause';
 	import { onMount } from 'svelte';
 
-	let { data }: PageProps = $props();
+	let { data, form }: PageProps = $props();
 	// --- cloud disk space ---
 	let diskSpace = $state<{
 		totalBytes: number;
@@ -221,6 +221,26 @@
 					</div>
 				{/if}
 			</div>
+
+			{#if data.requestState === 'pending'}
+				<p class="prompt">folder request pending approval</p>
+			{:else if data.requestState === 'eligible'}
+				<form class="rename-form" method="POST" action="?/requestFolder">
+					<label for="folder-request-name">request a folder:</label>
+					<input
+						id="folder-request-name"
+						class="rename-input"
+						name="name"
+						maxlength="64"
+						placeholder="folder name"
+						required
+					/>
+					<button type="submit" class="rename-confirm">request</button>
+				</form>
+			{/if}
+			{#if form?.message}
+				<p class="error">{form.message}</p>
+			{/if}
 
 			<div class="disk-space-banner">
 				{#if !diskSpaceError}

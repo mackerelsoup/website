@@ -2,7 +2,11 @@ import { WEBDAV_PASSWORD, WEBDAV_URL } from '$env/static/private';
 import type { PageServerLoad, Actions } from './$types';
 import { listDirectory, moveItem, deleteItem } from '$lib/webdav';
 import { redirect, fail } from '@sveltejs/kit';
-import { getAccessLevel } from '$lib/server/permissions';
+import { getAccessLevel, isAdmin } from '$lib/server/permissions';
+import { validateFolderName } from '$lib/server/path-utils';
+import { db } from '$lib/server/db';
+import { folderPermission, folderRequest } from '$lib/server/db/schema';
+import { and, eq } from 'drizzle-orm';
 
 const WEBDAV_USERNAME: string = 'homelab';
 
@@ -22,7 +26,54 @@ function backToPath(returnPath: string): never {
 	throw redirect(303, `/cloud/files?path=${encodeURIComponent(returnPath)}`);
 }
 
+/**
+ * What the Folder Request UI should show for this identity on the top-level listing:
+ * 'pending' — they already asked and it's unresolved; 'eligible' — they may ask; null — neither.
+ * "Has a Personal Folder" is detected as "holds any edit Grant of their own": a Personal Folder
+ * is exactly the Folder its identity holds `edit` on, and General Grants are view-only by
+ * definition, so an edit row with their login is the only thing that can represent one.
+ */
+async function folderRequestState(
+	login: string | undefined | null
+): Promise<'pending' | 'eligible' | null> {
+	if (!login || isAdmin(login)) return null; // admins already have edit everywhere
+
+	const pending = await db.query.folderRequest.findFirst({
+		where: and(eq(folderRequest.tailscaleLogin, login), eq(folderRequest.status, 'pending'))
+	});
+	if (pending) return 'pending';
+
+	const ownEditGrant = await db.query.folderPermission.findFirst({
+		where: and(eq(folderPermission.tailscaleLogin, login), eq(folderPermission.access, 'edit'))
+	});
+	return ownEditGrant ? null : 'eligible';
+}
+
 export const actions: Actions = {
+	/** Record a pending Folder Request. Provisioning happens on approval, not here. */
+	requestFolder: async ({ request, locals }) => {
+		const login = locals.tailscaleIdentity?.login;
+		if (!login) return fail(401, { message: 'No Tailscale identity' });
+
+		const form = await request.formData();
+		const result = validateFolderName(form.get('name'));
+		if (!result.ok) return fail(400, { message: result.message });
+
+		if ((await folderRequestState(login)) !== 'eligible') {
+			return fail(409, { message: 'You already have a pending request or a personal folder' });
+		}
+
+		try {
+			await db.insert(folderRequest).values({ tailscaleLogin: login, requestedName: result.name });
+		} catch (e) {
+			// The partial unique index is what actually settles two concurrent submits.
+			if ((e as { code?: string }).code !== '23505') throw e;
+			return fail(409, { message: 'You already have a pending folder request' });
+		}
+
+		return { message: 'Folder request submitted — waiting for approval' };
+	},
+
 	rename: async ({ request, locals }) => {
 		const form = await request.formData();
 		const path = form.get('path') as string;
@@ -88,10 +139,14 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		denyRedirect(path)
 	}
 
+	// Only the landing listing carries the Folder Request action — asking for a Personal Folder
+	// from three directories deep makes no sense, and it keeps the extra queries off every load.
+	const requestState = path === '/' ? await folderRequestState(locals.tailscaleIdentity?.login) : null;
+
 	try {
 		const contents = await listDirectory(WEBDAV_URL, WEBDAV_USERNAME, WEBDAV_PASSWORD, path);
-		return { files: contents, path, accessLevel };
+		return { files: contents, path, accessLevel, requestState };
 	} catch {
-		return { files: [], path, accessLevel, error: true };
+		return { files: [], path, accessLevel, requestState, error: true };
 	}
 };
