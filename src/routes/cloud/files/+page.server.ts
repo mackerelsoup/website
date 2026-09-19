@@ -67,11 +67,13 @@ export const actions: Actions = {
 			await db.insert(folderRequest).values({ tailscaleLogin: login, requestedName: result.name });
 		} catch (e) {
 			// The partial unique index is what actually settles two concurrent submits.
-			if ((e as { code?: string }).code !== '23505') throw e;
+			// drizzle wraps driver errors in DrizzleQueryError, so the pg code is on `cause`.
+			const code = ((e as { cause?: { code?: string } }).cause ?? (e as { code?: string })).code;
+			if (code !== '23505') throw e;
 			return fail(409, { message: 'You already have a pending folder request' });
 		}
 
-		return { message: 'Folder request submitted — waiting for approval' };
+		return { success: true, message: 'Folder request submitted — waiting for approval' };
 	},
 
 	rename: async ({ request, locals }) => {

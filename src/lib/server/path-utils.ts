@@ -1,5 +1,3 @@
-import { resolveUploadPath } from '$lib/server/safe-path';
-
 /** Normalize a WebDAV-style path: leading slash, no trailing slash (except root itself). */
 export function normalizePath(path: string): string {
 	let p = path.trim();
@@ -22,7 +20,5 @@ export function validateFolderName(
 	if (name.startsWith('.')) return { ok: false, message: 'Folder name cannot start with a dot' };
 	if (!/^[A-Za-z0-9 ._-]+$/.test(name))
 		return { ok: false, message: 'Use letters, numbers, spaces, dots, dashes or underscores' };
-	// Belt and braces: the joined path must not escape its parent.
-	if (!resolveUploadPath('/', name)) return { ok: false, message: 'Invalid folder name' };
 	return { ok: true, name };
 }

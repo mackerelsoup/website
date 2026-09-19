@@ -239,7 +239,7 @@
 				</form>
 			{/if}
 			{#if form?.message}
-				<p class="error">{form.message}</p>
+				<p class={form.success ? 'prompt' : 'error'}>{form.message}</p>
 			{/if}
 
 			<div class="disk-space-banner">
