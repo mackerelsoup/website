@@ -39,7 +39,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// Admin dashboard: its own Basic-auth credentials, separate from Tailscale identity.
 	if (
-		isAdminRoute(event.url.pathname) &&
+		// route.id is the route SvelteKit resolved (after percent-decoding), so /cloud/%61dmin can't slip past.
+		isAdminRoute(event.route.id ?? '') &&
 		!isValidAdminAuth(
 			event.request.headers.get('Authorization'),
 			env.ADMIN_USERNAME,

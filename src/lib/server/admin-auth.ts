@@ -1,8 +1,8 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 
-/** The admin dashboard and everything beneath it. */
-export function isAdminRoute(pathname: string): boolean {
-	return pathname === '/cloud/admin' || pathname.startsWith('/cloud/admin/');
+/** The admin dashboard and everything beneath it. Takes a SvelteKit route id, not a raw URL path. */
+export function isAdminRoute(routeId: string): boolean {
+	return routeId === '/cloud/admin' || routeId.startsWith('/cloud/admin/');
 }
 
 // Hash first so timingSafeEqual gets equal-length buffers and length doesn't leak.
@@ -23,6 +23,8 @@ export function isValidAdminAuth(
 	const decoded = Buffer.from(header.slice(6), 'base64').toString();
 	const i = decoded.indexOf(':');
 	if (i < 0) return false;
-	// non-short-circuit so both compares always run
-	return same(decoded.slice(0, i), expectedUser) && same(decoded.slice(i + 1), expectedPass);
+	// compute both before combining so timing doesn't reveal which half was wrong
+	const userOk = same(decoded.slice(0, i), expectedUser);
+	const passOk = same(decoded.slice(i + 1), expectedPass);
+	return userOk && passOk;
 }
