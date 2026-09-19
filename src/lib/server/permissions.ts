@@ -4,6 +4,7 @@ import { db } from '$lib/server/db';
 import { folderPermission, folder } from '$lib/server/db/schema';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { normalizePath } from '$lib/server/path-utils';
+import { assertEditGrantAllowed } from '$lib/server/protected-roots';
 
 export { normalizePath };
 
@@ -143,8 +144,13 @@ export async function hasAccess(login: string | undefined | null, path: string):
 	return grantedFolders.some((f) => pathCovers(normalizePath(f.path), requestFolder));
 }
 
-export async function grantAccess(folderPath: string, tailscaleLogin: string): Promise<void> {
+export async function grantAccess(
+	folderPath: string,
+	tailscaleLogin: string,
+	access: 'view' | 'edit'
+): Promise<void> {
 	const path = normalizePath(folderPath);
+	if (access === 'edit') assertEditGrantAllowed(path);
 	const login = tailscaleLogin.trim();
 	if (!login) throw new Error('tailscaleLogin is required');
 
@@ -160,7 +166,7 @@ export async function grantAccess(folderPath: string, tailscaleLogin: string): P
 
 	await db
 		.insert(folderPermission)
-		.values({ folderId: folderRow.id, tailscaleLogin: login, access: 'view' })
+		.values({ folderId: folderRow.id, tailscaleLogin: login, access })
 		.onConflictDoNothing();
 }
 
