@@ -1,5 +1,7 @@
 import type { Handle } from '@sveltejs/kit';
 import { TAILSCALE_OAUTH_CLIENT, TAILSCALE_OAUTH_PASSWORD } from '$env/static/private';
+import { env } from '$env/dynamic/private';
+import { isAdminRoute, isValidAdminAuth } from '$lib/server/admin-auth';
 import '$lib/server/disk-space'
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
@@ -34,6 +36,21 @@ async function getAccessToken(): Promise<string> {
 
 export const handle: Handle = async ({ event, resolve }) => {
 	//await getAccessToken();
+
+	// Admin dashboard: its own Basic-auth credentials, separate from Tailscale identity.
+	if (
+		isAdminRoute(event.url.pathname) &&
+		!isValidAdminAuth(
+			event.request.headers.get('Authorization'),
+			env.ADMIN_USERNAME,
+			env.ADMIN_PASSWORD
+		)
+	) {
+		return new Response('Unauthorized', {
+			status: 401,
+			headers: { 'WWW-Authenticate': 'Basic realm="admin", charset="UTF-8"' }
+		});
+	}
 
 	const tailscaleUser = event.request.headers.get('Tailscale-User-Login');
 	const tailscaleName = event.request.headers.get('Tailscale-User-Name');
