@@ -12,7 +12,7 @@ const WEBDAV_USERNAME = 'homelab';
 /**
  * Provision a pending Folder Request at `rawPath`: WebDAV directory, Folder row, and an `edit`
  * Grant for the requester. The DB writes share a transaction; the directory is created first
- * (idempotent), so a failed approval leaves at worst an empty directory.
+ * (idempotent), so only a race after the pre-checks can leave an empty directory.
  * Throws with a user-presentable message on any refusal.
  */
 export async function approveFolderRequest(id: number, rawPath: unknown): Promise<void> {
@@ -24,6 +24,11 @@ export async function approveFolderRequest(id: number, rawPath: unknown): Promis
 		where: and(eq(folderRequest.id, id), eq(folderRequest.status, 'pending'))
 	});
 	if (!req) throw new Error('Request is no longer pending');
+
+	// Fail on ordinary bad input before touching WebDAV; the transaction below re-checks for races.
+	if (await db.query.folder.findFirst({ where: eq(folder.path, parsed.path) })) {
+		throw new Error(`${parsed.path} is already a Folder`);
+	}
 
 	await createDirectory(WEBDAV_URL, WEBDAV_USERNAME, WEBDAV_PASSWORD, parsed.path);
 
