@@ -91,8 +91,10 @@ Every server-side entry point into the drive funnels through `getAccessLevel(log
   `NULL` means a General Grant), `access` (`'view' | 'edit'`, plain text, not an enum), `created_at`.
   Unique on `(folder_id, tailscale_login)`.
 
-Rows are created by hand via `npm run db:studio`. `grantAccess()` exists but hardcodes `access: 'view'`
-and silently returns when the folder row is missing (see issue #5).
+Rows are created via the `/cloud/admin` dashboard (approve a Folder Request, or add a grant to an
+existing Folder) or by hand via `npm run db:studio`. `grantAccess(path, login, access)` throws if the
+folder row is missing and upserts on `(folder_id, tailscale_login)`, so re-granting changes the level.
+`folder-admin.ts` provisions approved Folder Requests (`folder_request` table).
 
 ## `src/lib` (client-safe)
 

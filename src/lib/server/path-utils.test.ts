@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { validateFolderName } from './path-utils';
+import { validateFolderName, validateFolderPath } from './path-utils';
 
 test('rejects empty and whitespace-only names', () => {
 	expect(validateFolderName('')).toMatchObject({ ok: false });
@@ -25,4 +25,12 @@ test('rejects path separators', () => {
 test('accepts a valid name and trims it', () => {
 	expect(validateFolderName('  billy-files_1  ')).toEqual({ ok: true, name: 'billy-files_1' });
 	expect(validateFolderName('My Folder')).toEqual({ ok: true, name: 'My Folder' });
+});
+
+test('validateFolderPath normalizes and rejects bad segments', () => {
+	expect(validateFolderPath('bob')).toEqual({ ok: true, path: '/bob' });
+	expect(validateFolderPath('/family/bob/')).toEqual({ ok: true, path: '/family/bob' });
+	expect(validateFolderPath('/a/../b')).toMatchObject({ ok: false });
+	expect(validateFolderPath('/a//b')).toMatchObject({ ok: false });
+	expect(validateFolderPath('/.x')).toMatchObject({ ok: false });
 });
