@@ -22,3 +22,19 @@ export function validateFolderName(
 		return { ok: false, message: 'Use letters, numbers, spaces, dots, dashes or underscores' };
 	return { ok: true, name };
 }
+
+/**
+ * Validate an admin-edited Folder path: every segment must be a valid folder name, so no
+ * traversal or odd characters. Returns the normalized path or a message.
+ */
+export function validateFolderPath(
+	raw: unknown
+): { ok: true; path: string } | { ok: false; message: string } {
+	const path = normalizePath(typeof raw === 'string' ? raw : '');
+	if (path === '/') return { ok: true, path };
+	for (const segment of path.slice(1).split('/')) {
+		const r = validateFolderName(segment);
+		if (!r.ok) return { ok: false, message: `Invalid path segment "${segment}": ${r.message}` };
+	}
+	return { ok: true, path };
+}
