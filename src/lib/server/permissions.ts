@@ -168,7 +168,10 @@ export async function grantAccess(
 	await tx
 		.insert(folderPermission)
 		.values({ folderId: folderRow.id, tailscaleLogin: login, access })
-		.onConflictDoNothing();
+		.onConflictDoUpdate({
+			target: [folderPermission.folderId, folderPermission.tailscaleLogin],
+			set: { access }
+		});
 }
 
 export async function revokeAccess(id: number): Promise<void> {
