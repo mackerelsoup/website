@@ -1,5 +1,4 @@
 <script lang="ts">
-	import './files.scss';
 	import type { PageProps } from './$types';
 	import { UploadManager } from './upload.svelte';
 	import IconPlay from '~icons/tdesign/play';
@@ -403,3 +402,384 @@
 		{/each}
 	{/if}
 </div>
+
+<style lang="scss">
+.files {
+	font-family: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+	background: #1e1f2e;
+	color: #c4c6d4;
+	min-height: 100vh;
+	padding: 24px 32px;
+	box-sizing: border-box;
+}
+
+.overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 51;
+}
+
+.error {
+	color: #f87171;
+	font-size: 0.9rem;
+
+	&::before {
+		content: 'bash: ';
+		color: #50577a;
+	}
+}
+
+// ---- prompt bar: path + upload/select/delete actions ----
+.prompt {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	align-items: center;
+	row-gap: 8px;
+	font-size: 0.95rem;
+	margin-bottom: 8px;
+	user-select: none;
+}
+
+.prompt-user {
+	color: #6b728e;
+}
+.prompt-path {
+	color: #6b728e;
+}
+.prompt-dollar {
+	color: #c4c6d4;
+}
+.prompt-cmd {
+	color: #c4c6d4;
+}
+
+.prompt-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 2px;
+	margin-left: 10px;
+	form {
+		display: contents;
+	}
+}
+
+.upload-btn {
+	background: none;
+	color: #6b728e;
+	font-family: inherit;
+	font-size: 0.85rem;
+	padding: 1px 5px;
+	cursor: pointer;
+	transition:
+		background 0.1s,
+		color 0.1s,
+		border-color 0.1s;
+
+	&::before {
+		content: '[ ';
+	}
+	&::after {
+		content: ' ]';
+	}
+
+	&:hover {
+		background: #404258;
+		border-color: #6b728e;
+		color: #c4c6d4;
+	}
+}
+
+.delete-btn {
+	background: none;
+	color: #f87171;
+	font-family: inherit;
+	font-size: 0.85rem;
+	padding: 1px 10px;
+	cursor: pointer;
+	transition:
+		background 0.1s,
+		color 0.1s,
+		border-color 0.1s;
+
+	&::before {
+		content: '[ ';
+	}
+	&::after {
+		content: ' ]';
+	}
+
+	&:hover {
+		background: #3a2a2a;
+		border-color: #f87171;
+		color: #f87171;
+	}
+}
+
+// ---- disk space banner ----
+.disk-space-banner {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	margin-bottom: 8px;
+}
+
+.disk-space-bar {
+	flex: 1;
+	height: 6px;
+	margin-right: 10px;
+	border-radius: 75px;
+	background: #404258;
+}
+
+.disk-space-fill {
+	height: 100%;
+	background: #6b728e;
+	border-radius: 75px;
+	transition:
+		width 0.1s,
+		background 0.1s;
+
+	&.healthy {
+		background: #7a9e7e;
+	}
+	&.warning {
+		background: #c9a15a;
+	}
+	&.critical {
+		background: #c9636f;
+	}
+}
+
+.disk-space-used {
+	font-size: 0.85rem;
+	color: #6b728e;
+}
+
+// ---- upload progress banner ----
+.upload-banner {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	border-left: 2px solid #50577a;
+	padding: 5px 10px;
+	margin-bottom: 12px;
+	font-size: 0.85rem;
+	color: #6b728e;
+}
+
+.pause-play-btn {
+	font-size: 1.4rem; // controls icon size
+	background: none;
+	border: none;
+	color: #6b728e;
+	cursor: pointer;
+	padding: 2px;
+	display: flex;
+
+	&:focus-visible {
+		outline: 1px solid #6b728e;
+	}
+	&:hover {
+		background: #404258;
+		color: #c4c6d4;
+	}
+}
+
+.banner-label {
+	color: #6b728e;
+}
+.banner-filename {
+	color: #c4c6d4;
+}
+.error-text {
+	color: #f87171;
+}
+
+.banner-dismiss {
+	background: none;
+	border: none;
+	color: #50577a;
+	font-family: inherit;
+	font-size: 0.85rem;
+	cursor: pointer;
+	padding: 0;
+
+	&:hover {
+		color: #c4c6d4;
+	}
+}
+
+.progress-bar {
+	flex: 1;
+	height: 2px;
+	background: #404258;
+}
+
+.progress-fill {
+	height: 100%;
+	background: #6b728e;
+	transition: width 0.1s;
+}
+
+// ---- file/directory list rows ----
+.row {
+	position: relative;
+	display: flex;
+	align-items: center;
+	margin-bottom: 1px;
+	user-select: none;
+}
+
+.row-selected {
+	background: #272838;
+}
+
+.entry {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	padding: 2px 6px;
+	text-decoration: none;
+	font-size: 0.95rem;
+
+	&:focus-visible {
+		outline: 1px solid #6b728e;
+	}
+	&:hover {
+		background: #404258;
+	}
+}
+
+.dir {
+	color: #6b728e;
+	font-weight: bold;
+}
+.file {
+	color: #c4c6d4;
+	margin: 2px;
+}
+
+.select-check {
+	appearance: none;
+	width: 11px;
+	height: 11px;
+	border: 1px solid #50577a;
+	background: transparent;
+	cursor: pointer;
+	margin: 0 6px 0 4px;
+	flex-shrink: 0;
+
+	&:checked {
+		background: #6b728e;
+		border-color: #6b728e;
+	}
+}
+
+// ---- per-row "..." dropdown menu ----
+.dots {
+	background: none;
+	border: none;
+	color: #50577a;
+	font-size: 0.9rem;
+	cursor: pointer;
+	padding: 2px 8px;
+	line-height: 1;
+	font-family: inherit;
+	opacity: 1;
+	transition:
+		opacity 0.1s,
+		color 0.1s;
+}
+
+.dots:hover {
+	color: #c4c6d4;
+	background: #404258;
+}
+
+.menu-wrapper {
+	position: relative;
+}
+
+.dropdown {
+	position: absolute;
+	right: 0;
+	top: calc(100% + 2px);
+	background: #404258;
+	border: 1px solid #50577a;
+	overflow: hidden;
+	z-index: 100;
+	min-width: 120px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+	font-family: inherit;
+
+	button,
+	form {
+		display: block;
+		width: 100%;
+		margin: 0;
+	}
+
+	button {
+		background: none;
+		border: none;
+		color: #c4c6d4;
+		padding: 7px 14px;
+		text-align: left;
+		cursor: pointer;
+		font-size: 0.9rem;
+		font-family: inherit;
+		width: 100%;
+
+		&:hover {
+			background: #474e68;
+			color: #e0e2f0;
+		}
+		&.delete {
+			color: #f87171;
+		}
+		&.delete:hover {
+			background: #3a2a2a;
+		}
+	}
+}
+
+// ---- inline rename form (swapped in for a row's link) ----
+.rename-form {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 6px;
+}
+
+.rename-input {
+	flex: 1;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid #6b728e;
+	color: #c4c6d4;
+	padding: 2px 4px;
+	font-size: 0.95rem;
+	font-family: inherit;
+	outline: none;
+}
+
+.rename-confirm,
+.rename-cancel {
+	background: none;
+	border: none;
+	cursor: pointer;
+	padding: 2px 6px;
+	font-size: 0.9rem;
+	font-family: inherit;
+}
+
+.rename-confirm {
+	color: #6b728e;
+}
+.rename-cancel {
+	color: #f87171;
+}
+</style>
