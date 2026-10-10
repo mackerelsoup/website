@@ -144,10 +144,14 @@ export async function hasAccess(login: string | undefined | null, path: string):
 	return grantedFolders.some((f) => pathCovers(normalizePath(f.path), requestFolder));
 }
 
+/** `db` or a transaction handle, so callers can make a grant part of a larger atomic operation. */
+type Executor = Pick<typeof db, 'query' | 'insert'>;
+
 export async function grantAccess(
 	folderPath: string,
 	tailscaleLogin: string,
-	access: 'view' | 'edit'
+	access: 'view' | 'edit',
+	tx: Executor = db
 ): Promise<void> {
 	const path = normalizePath(folderPath);
 	if (access === 'edit') assertEditGrantAllowed(path);
@@ -155,19 +159,19 @@ export async function grantAccess(
 	if (!login) throw new Error('tailscaleLogin is required');
 
   //there should only be one folder per path
-	const folderRow = await db.query.folder.findFirst({
+	const folderRow = await tx.query.folder.findFirst({
 		where: eq(folder.path, path)
 	});
 
-	if (!folderRow) {
-    //add some error handling
-    return 
-	}
+	if (!folderRow) throw new Error(`${path} is not a registered Folder`);
 
-	await db
+	await tx
 		.insert(folderPermission)
 		.values({ folderId: folderRow.id, tailscaleLogin: login, access })
-		.onConflictDoNothing();
+		.onConflictDoUpdate({
+			target: [folderPermission.folderId, folderPermission.tailscaleLogin],
+			set: { access }
+		});
 }
 
 export async function revokeAccess(id: number): Promise<void> {
