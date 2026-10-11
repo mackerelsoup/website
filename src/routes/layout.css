@@ -1,7 +1,57 @@
 @import 'tailwindcss';
 @plugin '@tailwindcss/typography';
 
-html, body {
-  height: 100%;
-  width: 100%
+/* Shared design tokens for every app surface (files, admin, no-access, modal). */
+:root {
+	--mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+
+	--bg: #1e1f2e;
+	--surface: #272940;
+	--hover: #32344d;
+	--raised: #404258;
+	--line: #3b3e57;
+	--line-strong: #50577a;
+
+	--fg: #c4c6d4;
+	--fg-strong: #e0e2f0;
+	--muted: #8a90ab; /* ≥4.5:1 on --bg */
+
+	--accent: #7aa2f7;
+	--accent-hover: #9db8f9;
+	--accent-ink: #1e1f2e;
+	--danger: #f87171;
+	--danger-bg: #2d1f2b;
+	--ok: #9ece6a;
+
+	--ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+	--fast: 0.15s;
+}
+
+html,
+body {
+	height: 100%;
+	width: 100%;
+}
+
+::selection {
+	background: color-mix(in srgb, var(--accent) 35%, transparent);
+	color: var(--fg-strong);
+}
+
+* {
+	scrollbar-color: var(--line-strong) transparent;
+}
+
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+	}
 }

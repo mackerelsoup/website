@@ -441,7 +441,7 @@
 
 				{#if !selecting && renaming !== file.filename}
 					<div class="menu-wrapper">
-						<button class="dots" onclick={() => toggleMenu(file.filename)}>...</button>
+						<button class="dots" aria-label="actions for {file.basename}" aria-expanded={menuOpen === file.filename} onclick={() => toggleMenu(file.filename)}>...</button>
 						{#if menuOpen === file.filename}
 							<div class="dropdown">
 								<button onclick={() => startRename(file.filename, file.basename)}>rename</button>
@@ -462,12 +462,16 @@
 
 <style lang="scss">
 	.files {
-		font-family: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-		background: #1e1f2e;
-		color: #c4c6d4;
+		font-family: var(--mono);
+		background: var(--bg);
+		color: var(--fg);
 		min-height: 100vh;
 		padding: 24px 32px;
 		box-sizing: border-box;
+
+		@media (max-width: 520px) {
+			padding: 16px;
+		}
 	}
 
 	.overlay {
@@ -477,12 +481,12 @@
 	}
 
 	.error {
-		color: #f87171;
+		color: var(--danger);
 		font-size: 0.9rem;
 
 		&::before {
 			content: 'bash: ';
-			color: #50577a;
+			color: var(--line-strong);
 		}
 	}
 
@@ -498,17 +502,9 @@
 		user-select: none;
 	}
 
-	.prompt-user {
-		color: #6b728e;
-	}
+	.prompt-user,
 	.prompt-path {
-		color: #6b728e;
-	}
-	.prompt-dollar {
-		color: #c4c6d4;
-	}
-	.prompt-cmd {
-		color: #c4c6d4;
+		color: var(--muted);
 	}
 
 	.prompt-actions {
@@ -516,23 +512,25 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 2px;
-		margin-left: 10px;
 		form {
 			display: contents;
 		}
 	}
 
-	.upload-btn {
+	// shared bracketed text button: [ label ]
+	.upload-btn,
+	.delete-btn {
 		background: none;
-		color: #6b728e;
+		border: 0;
+		border-radius: 3px;
+		color: var(--muted);
 		font-family: inherit;
 		font-size: 0.85rem;
 		padding: 1px 5px;
 		cursor: pointer;
 		transition:
-			background 0.1s,
-			color 0.1s,
-			border-color 0.1s;
+			background var(--fast),
+			color var(--fast);
 
 		&::before {
 			content: '[ ';
@@ -542,35 +540,17 @@
 		}
 
 		&:hover {
-			background: #404258;
-			border-color: #6b728e;
-			color: #c4c6d4;
+			background: var(--raised);
+			color: var(--fg);
 		}
 	}
 
 	.delete-btn {
-		background: none;
-		color: #f87171;
-		font-family: inherit;
-		font-size: 0.85rem;
-		padding: 1px 10px;
-		cursor: pointer;
-		transition:
-			background 0.1s,
-			color 0.1s,
-			border-color 0.1s;
-
-		&::before {
-			content: '[ ';
-		}
-		&::after {
-			content: ' ]';
-		}
+		color: var(--danger);
 
 		&:hover {
-			background: #3a2a2a;
-			border-color: #f87171;
-			color: #f87171;
+			background: var(--danger-bg);
+			color: var(--danger);
 		}
 	}
 
@@ -580,6 +560,8 @@
 		flex: 1;
 		align-items: center;
 		margin-bottom: 8px;
+		font-size: 0.85rem;
+		color: var(--muted);
 	}
 
 	.disk-space-bar {
@@ -587,16 +569,17 @@
 		height: 6px;
 		margin-right: 10px;
 		border-radius: 75px;
-		background: #404258;
+		background: var(--raised);
+		overflow: hidden;
 	}
 
 	.disk-space-fill {
 		height: 100%;
-		background: #6b728e;
+		background: var(--muted);
 		border-radius: 75px;
 		transition:
-			width 0.1s,
-			background 0.1s;
+			width 0.4s var(--ease-out),
+			background var(--fast);
 
 		&.healthy {
 			background: #7a9e7e;
@@ -610,8 +593,7 @@
 	}
 
 	.disk-space-used {
-		font-size: 0.85rem;
-		color: #6b728e;
+		font-variant-numeric: tabular-nums;
 	}
 
 	// ---- upload progress banner ----
@@ -619,65 +601,66 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		border-left: 2px solid #50577a;
+		border-left: 1px solid var(--line-strong);
 		padding: 5px 10px;
 		margin-bottom: 12px;
 		font-size: 0.85rem;
-		color: #6b728e;
+		color: var(--muted);
+		font-variant-numeric: tabular-nums;
+		animation: rise 0.25s var(--ease-out);
 	}
 
 	.pause-play-btn {
 		font-size: 1.4rem; // controls icon size
 		background: none;
-		border: none;
-		color: #6b728e;
+		border: 0;
+		border-radius: 3px;
+		color: var(--muted);
 		cursor: pointer;
 		padding: 2px;
 		display: flex;
+		transition:
+			background var(--fast),
+			color var(--fast);
 
-		&:focus-visible {
-			outline: 1px solid #6b728e;
-		}
 		&:hover {
-			background: #404258;
-			color: #c4c6d4;
+			background: var(--raised);
+			color: var(--fg);
 		}
 	}
 
-	.banner-label {
-		color: #6b728e;
-	}
 	.banner-filename {
-		color: #c4c6d4;
+		color: var(--fg);
 	}
 	.error-text {
-		color: #f87171;
+		color: var(--danger);
 	}
 
 	.banner-dismiss {
 		background: none;
-		border: none;
-		color: #50577a;
+		border: 0;
+		color: var(--muted);
 		font-family: inherit;
 		font-size: 0.85rem;
 		cursor: pointer;
 		padding: 0;
+		transition: color var(--fast);
 
 		&:hover {
-			color: #c4c6d4;
+			color: var(--fg);
 		}
 	}
 
 	.progress-bar {
 		flex: 1;
 		height: 2px;
-		background: #404258;
+		background: var(--raised);
 	}
 
 	.progress-fill {
 		height: 100%;
-		background: #6b728e;
-		transition: width 0.1s;
+		background: var(--accent);
+		transition: width 0.2s linear;
 	}
 
 	// ---- file/directory list rows ----
@@ -686,11 +669,13 @@
 		display: flex;
 		align-items: center;
 		margin-bottom: 1px;
+		border-radius: 3px;
 		user-select: none;
+		transition: background var(--fast);
 	}
 
 	.row-selected {
-		background: #272838;
+		background: var(--surface);
 	}
 
 	.entry {
@@ -698,61 +683,63 @@
 		display: flex;
 		align-items: center;
 		padding: 2px 6px;
+		border-radius: 3px;
 		text-decoration: none;
 		font-size: 0.95rem;
+		transition: background var(--fast);
 
-		&:focus-visible {
-			outline: 1px solid #6b728e;
-		}
 		&:hover {
-			background: #404258;
+			background: var(--raised);
 		}
 	}
 
 	.dir {
-		color: #6b728e;
+		color: var(--muted);
 		font-weight: bold;
 	}
 	.file {
-		color: #c4c6d4;
-		margin: 2px;
+		color: var(--fg);
 	}
 
 	.select-check {
 		appearance: none;
-		width: 11px;
-		height: 11px;
-		border: 1px solid #50577a;
+		width: 12px;
+		height: 12px;
+		border: 1px solid var(--line-strong);
+		border-radius: 2px;
 		background: transparent;
 		cursor: pointer;
 		margin: 0 6px 0 4px;
 		flex-shrink: 0;
+		transition:
+			background var(--fast),
+			border-color var(--fast);
 
 		&:checked {
-			background: #6b728e;
-			border-color: #6b728e;
+			background: var(--accent);
+			border-color: var(--accent);
 		}
 	}
 
 	// ---- per-row "..." dropdown menu ----
 	.dots {
 		background: none;
-		border: none;
-		color: #50577a;
+		border: 0;
+		border-radius: 3px;
+		color: var(--muted);
 		font-size: 0.9rem;
 		cursor: pointer;
 		padding: 2px 8px;
 		line-height: 1;
 		font-family: inherit;
-		opacity: 1;
 		transition:
-			opacity 0.1s,
-			color 0.1s;
-	}
+			color var(--fast),
+			background var(--fast);
 
-	.dots:hover {
-		color: #c4c6d4;
-		background: #404258;
+		&:hover {
+			color: var(--fg);
+			background: var(--raised);
+		}
 	}
 
 	.menu-wrapper {
@@ -763,13 +750,16 @@
 		position: absolute;
 		right: 0;
 		top: calc(100% + 2px);
-		background: #404258;
-		border: 1px solid #50577a;
+		background: var(--raised);
+		border: 1px solid var(--line-strong);
+		border-radius: 4px;
 		overflow: hidden;
 		z-index: 100;
 		min-width: 120px;
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 		font-family: inherit;
+		transform-origin: top right;
+		animation: pop 0.15s var(--ease-out);
 
 		button,
 		form {
@@ -780,63 +770,96 @@
 
 		button {
 			background: none;
-			border: none;
-			color: #c4c6d4;
+			border: 0;
+			color: var(--fg);
 			padding: 7px 14px;
 			text-align: left;
 			cursor: pointer;
 			font-size: 0.9rem;
 			font-family: inherit;
-			width: 100%;
+			transition: background var(--fast);
 
 			&:hover {
-				background: #474e68;
-				color: #e0e2f0;
+				background: var(--hover);
+				color: var(--fg-strong);
 			}
 			&.delete {
-				color: #f87171;
+				color: var(--danger);
 			}
 			&.delete:hover {
-				background: #3a2a2a;
+				background: var(--danger-bg);
+			}
+			&:focus-visible {
+				outline-offset: -2px;
 			}
 		}
 	}
 
-	// ---- inline rename form (swapped in for a row's link) ----
+	// ---- inline rename / request form (swapped in for a row's link) ----
 	.rename-form {
 		flex: 1;
 		display: flex;
 		align-items: center;
 		gap: 6px;
 		padding: 2px 6px;
+		font-size: 0.95rem;
+		color: var(--muted);
 	}
 
 	.rename-input {
 		flex: 1;
+		min-width: 0;
 		background: transparent;
-		border: none;
-		border-bottom: 1px solid #6b728e;
-		color: #c4c6d4;
+		border: 0;
+		border-bottom: 1px solid var(--line-strong);
+		color: var(--fg);
 		padding: 2px 4px;
 		font-size: 0.95rem;
 		font-family: inherit;
-		outline: none;
+		transition: border-color var(--fast);
+
+		&:focus {
+			outline: none;
+			border-bottom-color: var(--accent);
+		}
+		&::placeholder {
+			color: var(--muted);
+		}
 	}
 
 	.rename-confirm,
 	.rename-cancel {
 		background: none;
-		border: none;
+		border: 0;
+		border-radius: 3px;
 		cursor: pointer;
 		padding: 2px 6px;
 		font-size: 0.9rem;
 		font-family: inherit;
+		transition: background var(--fast);
+
+		&:hover {
+			background: var(--raised);
+		}
 	}
 
 	.rename-confirm {
-		color: #6b728e;
+		color: var(--accent);
 	}
 	.rename-cancel {
-		color: #f87171;
+		color: var(--danger);
+	}
+
+	@keyframes rise {
+		from {
+			opacity: 0;
+			transform: translateY(-4px);
+		}
+	}
+	@keyframes pop {
+		from {
+			opacity: 0;
+			transform: scale(0.96);
+		}
 	}
 </style>

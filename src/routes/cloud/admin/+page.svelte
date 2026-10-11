@@ -34,7 +34,7 @@
 	{#if data.requests.length === 0}
 		<p class="empty">no pending requests</p>
 	{:else}
-		<table>
+		<div class="table-wrap"><table>
 			<thead>
 				<tr><th scope="col">requester</th><th scope="col">requested name</th><th scope="col">created</th><th scope="col"><span class="sr">actions</span></th></tr>
 			</thead>
@@ -58,11 +58,11 @@
 					</tr>
 				{/each}
 			</tbody>
-		</table>
+		</table></div>
 	{/if}
 
 	<h2>grants</h2>
-	<table>
+	<div class="table-wrap"><table>
 		<thead>
 			<tr><th scope="col">folder</th><th scope="col">login</th><th scope="col">access</th><th scope="col"><span class="sr">actions</span></th></tr>
 		</thead>
@@ -81,7 +81,7 @@
 				</tr>
 			{/each}
 		</tbody>
-	</table>
+	</table></div>
 	{#if data.grants.length === 0}<p class="empty">no grants yet</p>{/if}
 
 	<h2>add grant</h2>
@@ -100,15 +100,15 @@
 
 <style>
 	:global(body) {
-		background: #1e1f2e;
+		background: var(--bg);
 		margin: 0;
 	}
 
 	main {
-		font-family: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-		color: #c4c6d4;
+		font-family: var(--mono);
+		color: var(--fg);
 		min-height: 100vh;
-		padding: 24px;
+		padding: 24px 32px;
 		box-sizing: border-box;
 	}
 
@@ -133,41 +133,39 @@
 	}
 
 	.error {
-		color: #f7768e;
+		color: var(--danger);
 	}
 
 	.ok {
-		color: #9ece6a;
+		color: var(--ok);
 	}
 
 	.inline {
 		display: inline-flex;
+		flex-wrap: wrap;
 		gap: 6px;
 	}
 
 	.empty {
-		color: #8a90ab;
+		color: var(--muted);
 	}
 
 	button {
 		font: inherit;
 		color: inherit;
 		background: transparent;
-		border: 1px solid #3b3e57;
+		border: 1px solid var(--line);
 		border-radius: 3px;
 		padding: 2px 10px;
 		cursor: pointer;
+		transition:
+			background var(--fast),
+			border-color var(--fast);
 	}
 
-	button:hover,
-	button:focus-visible {
-		background: #2a2c40;
-		border-color: #6b728e;
-		outline: 2px solid transparent; /* shows in forced-colors mode */
-	}
-
-	button:focus-visible {
-		box-shadow: 0 0 0 2px #7aa2f7;
+	button:hover {
+		background: var(--surface);
+		border-color: var(--line-strong);
 	}
 
 	button:disabled {
@@ -180,45 +178,47 @@
 	select {
 		font: inherit;
 		color: inherit;
-		background: #272940;
-		border: 1px solid #3b3e57;
+		background: var(--surface);
+		border: 1px solid var(--line);
 		border-radius: 3px;
 		padding: 2px 6px;
+		transition: border-color var(--fast);
+	}
+
+	input:hover,
+	select:hover {
+		border-color: var(--line-strong);
 	}
 
 	input::placeholder {
-		color: #8a90ab;
-	}
-
-	input:focus-visible,
-	select:focus-visible {
-		outline: 2px solid #7aa2f7;
-		outline-offset: 1px;
+		color: var(--muted);
 	}
 
 	/* constructive: the one filled button per row (approve, add) */
 	.primary {
-		color: #1e1f2e;
-		background: #7aa2f7;
-		border-color: #7aa2f7;
+		color: var(--accent-ink);
+		background: var(--accent);
+		border-color: var(--accent);
 	}
 
-	.primary:hover,
-	.primary:focus-visible {
-		background: #9db8f9;
-		border-color: #9db8f9;
+	.primary:hover {
+		background: var(--accent-hover);
+		border-color: var(--accent-hover);
 	}
 
 	/* destructive: red at rest, so deny/revoke never read as neutral */
 	.danger {
-		color: #f7768e;
+		color: var(--danger);
 		border-color: #a84e63;
 	}
 
-	.danger:hover,
-	.danger:focus-visible {
-		border-color: #f7768e;
-		background: #2d1f2b;
+	.danger:hover {
+		border-color: var(--danger);
+		background: var(--danger-bg);
+	}
+
+	.table-wrap {
+		overflow-x: auto;
 	}
 
 	table {
@@ -227,7 +227,7 @@
 	}
 
 	th {
-		color: #8a90ab;
+		color: var(--muted);
 		font-weight: 400;
 		text-align: left;
 	}
@@ -235,5 +235,10 @@
 	th,
 	td {
 		padding: 6px 24px 6px 0;
+		font-variant-numeric: tabular-nums;
+	}
+
+	tbody tr {
+		border-top: 1px solid var(--line);
 	}
 </style>

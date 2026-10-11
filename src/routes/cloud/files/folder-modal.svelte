@@ -53,24 +53,20 @@
 
 <style>
 	dialog {
-		--accent: #e2b865;
-		--accent-hover: #eecb82;
-		--accent-ink: #1b1a24;
-		--muted: #aeb1ca;
-		--field-border: #373a58;
+		--field-border: var(--line);
 
 		margin: auto;
 		overflow: visible; /* badge pops out of the top */
 		padding: 0;
 		width: min(560px, calc(100vw - 2rem));
-		background: #1e1f2e;
-		color: #f3f4fb;
-		border: 1px solid #323450;
+		background: var(--bg);
+		color: var(--fg-strong);
+		border: 1px solid var(--line);
 		border-radius: 28px;
 		box-shadow:
-			0 8px 0 #0a0b13,
+			0 8px 24px rgba(10, 11, 19, 0.5),
 			0 36px 70px rgba(4, 5, 12, 0.6);
-		font-family: 'Right Grotesk Mono', 'Space Mono', 'Cascadia Code', 'Courier New', monospace;
+		font-family: var(--mono);
 	}
 	dialog::backdrop {
 		background: rgba(5, 8, 12, 0.7);
@@ -121,7 +117,7 @@
 		height: 54px;
 		display: flex;
 		overflow: hidden;
-		background: #161725;
+		background: var(--surface);
 		border: 1px solid var(--field-border);
 		border-radius: 999px;
 		transition:
@@ -129,11 +125,11 @@
 			box-shadow 0.15s;
 	}
 	dialog :global(form:hover) {
-		border-color: #4a4e72;
+		border-color: var(--line-strong);
 	}
 	dialog :global(form:focus-within) {
 		border-color: var(--accent);
-		box-shadow: 0 0 0 4px rgba(226, 184, 101, 0.2);
+		box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
 	}
 	dialog :global(input:not([type='hidden'])) {
 		flex: 1;
@@ -149,7 +145,7 @@
 		outline: none;
 	}
 	dialog :global(input::placeholder) {
-		color: #8185a6;
+		color: var(--muted);
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		font-size: 13px;
@@ -198,7 +194,7 @@
 	}
 	dialog :global(.error) {
 		margin: 0;
-		color: #f08a8a;
+		color: var(--danger);
 		font-size: 0.875rem;
 	}
 	.actions {
@@ -214,8 +210,8 @@
 		color: var(--muted);
 	}
 	.cancel:hover {
-		color: #f3f4fb;
-		background: #2b2d44;
+		color: var(--fg-strong);
+		background: var(--raised);
 	}
 	.cancel:focus-visible {
 		outline: 2px solid var(--accent);
