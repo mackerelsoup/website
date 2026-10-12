@@ -4,6 +4,7 @@ import { listDirectory, moveItem, deleteItem, exists, createDirectory,  } from '
 import { redirect, fail, isActionFailure } from '@sveltejs/kit';
 import { getAccessLevel, isAdmin } from '$lib/server/permissions';
 import { validateFolderName } from '$lib/server/path-utils';
+import { visibleSiblings } from '$lib/server/siblings';
 import { db } from '$lib/server/db';
 import { folderPermission, folderRequest } from '$lib/server/db/schema';
 import { and, eq } from 'drizzle-orm';
@@ -170,10 +171,27 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const requestState =
 		path === '/' ? await folderRequestState(locals.tailscaleIdentity?.login) : null;
 
+	const login = locals.tailscaleIdentity?.login;
+	const here = { basename: path.split('/').pop() ?? '', filename: path };
+
+	// Parent pane: sibling Folders, filtered through the same access check as everything else
+	// so folder names the Grants don't cover are never sent to the client.
+	const loadSiblings = async () => {
+		if (path === '/') return [];
+		const parent = path.replace(/\/$/, '').split('/').slice(0, -1).join('/') || '/';
+		try {
+			if (!(await getAccessLevel(login, parent))) return [here];
+			const entries = await listDirectory(WEBDAV_URL, WEBDAV_USERNAME, WEBDAV_PASSWORD, parent);
+			return await visibleSiblings(entries, here, async (p) => !!(await getAccessLevel(login, p)));
+		} catch {
+			return [here];
+		}
+	};
+
 	try {
 		const contents = await listDirectory(WEBDAV_URL, WEBDAV_USERNAME, WEBDAV_PASSWORD, path);
-		return { files: contents, path, accessLevel, requestState };
+		return { files: contents, path, accessLevel, requestState, siblings: await loadSiblings() };
 	} catch {
-		return { files: [], path, accessLevel, requestState, error: true };
+		return { files: [], path, accessLevel, requestState, siblings: [here], error: true };
 	}
 };
