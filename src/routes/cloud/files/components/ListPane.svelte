@@ -208,9 +208,10 @@
 		&:hover {
 			background: color-mix(in srgb, var(--m-selected) 60%, transparent);
 		}
-		&:focus-visible {
-			outline: 2px solid var(--m-accent);
-			outline-offset: -2px;
+		// the cursor row already has a background + marker; the gold ring was a clipped duplicate.
+		// .row prefix outranks the page-wide a:focus-visible rule
+		.row &:focus-visible {
+			outline: none;
 		}
 	}
 	.marker {

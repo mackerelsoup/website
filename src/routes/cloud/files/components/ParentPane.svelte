@@ -5,12 +5,12 @@
 		$props();
 
 	const parent = $derived(parentPath(path));
-	const parentName = $derived(parent === '/' ? '/' : (parent.split('/').pop() ?? ''));
 </script>
 
 <nav aria-label="Folders in {parent}">
 	{#if path !== '/'}
-		<div class="title muted">{parentName}</div>
+		<!-- rtl + inner ltr: a long path truncates at the start, keeping the nearest folders visible -->
+		<div class="title muted" title={parent}><bdo dir="ltr">{parent}</bdo></div>
 		{#each siblings as s (s.filename)}
 			{@const current = s.filename === path}
 			<a
@@ -31,6 +31,11 @@
 	}
 	.title {
 		padding: 0 14px 6px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		direction: rtl;
+		text-align: left;
 	}
 	.muted {
 		color: var(--m-muted);

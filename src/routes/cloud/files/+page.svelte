@@ -303,7 +303,7 @@
 </Modal>
 
 <div class="files">
-	<Header path={data.path} accessLevel={access} />
+	<Header accessLevel={access} />
 
 	{#if data.requestState === 'pending'}
 		<p class="notice">folder request pending approval</p>
@@ -496,8 +496,7 @@
 		flex: 1;
 		min-height: 0;
 		display: grid;
-		grid-template-columns: 200px minmax(0, 1fr) 360px;
-		border: 1px solid var(--m-line);
+		grid-template-columns: 200px minmax(0, 1fr) 360px;		border: 1px solid var(--m-line);
 		border-radius: 6px;
 		overflow: hidden;
 		background: var(--m-panel);

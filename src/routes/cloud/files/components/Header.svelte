@@ -1,7 +1,7 @@
 <script lang="ts">
 	import DiskGauge from './DiskGauge.svelte';
 
-	let { path, accessLevel }: { path: string; accessLevel: 'view' | 'edit' | null } = $props();
+	let { accessLevel }: { accessLevel: 'view' | 'edit' | null } = $props();
 </script>
 
 <header>
@@ -21,7 +21,6 @@ d88' `"Y8 888  d88' `88b `888  `888  d88' `888
 			<span class="dim" aria-hidden="true">│</span> <span class="muted">tailscale</span>
 		</div>
 		<DiskGauge />
-		<div class="muted path">{path}</div>
 	</div>
 </header>
 
@@ -47,10 +46,6 @@ d88' `"Y8 888  d88' `88b `888  `888  d88' `888
 		align-items: flex-end;
 		gap: 2px;
 		min-width: 0;
-	}
-	.path {
-		word-break: break-all;
-		text-align: right;
 	}
 	.muted {
 		color: var(--m-muted);
