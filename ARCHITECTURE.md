@@ -44,7 +44,7 @@ docs/adr/               architecture decision records
 |---|---|---|
 | `/` | `+page.svelte` | Unused SvelteKit starter placeholder — not linked from the cloud UI. |
 | `/cloud` | `+page.server.ts`, `+page.svelte` | Health-check landing page: pings the WebDAV backend (`client.exists('/')`); redirects to `/cloud/files` if reachable, otherwise renders `components/Offline.svelte`. |
-| `/cloud/files` | `+page.server.ts`, `+page.svelte`, `upload.svelte.ts` | The main file browser — directory listing, rename/delete/bulk-delete, upload picker/progress banner, disk-space widget. |
+| `/cloud/files` | `+page.server.ts`, `+page.svelte`, `upload.svelte.ts` | The main file browser, laid out as Miller columns (parent / list / preview panes, status bar) with vim-style keys. Components live in `components/`; `format.ts` holds display helpers. `load` also returns `siblings` — sibling Folders filtered through `getAccessLevel` (`lib/server/siblings.ts`) so the parent pane never leaks names the Grants don't cover. |
 | `/cloud/files/upload/init` | `+server.ts` | `POST` — starts or resumes a chunked upload transfer. Requires `edit` on `destPath`. |
 | `/cloud/files/upload/chunk` | `+server.ts` | `PUT` — receives one chunk; triggers finalize when the last chunk lands. Re-checks `edit`. |
 | `/cloud/files/upload-progress` | `+server.ts` | `GET` (SSE) — streams server-side save progress for an upload session. |
@@ -241,7 +241,7 @@ notably the admin dashboard, Folder Requests, Protected Root enforcement, and se
   does not exist yet (#7).
 - **`access` is untyped text.** The column is plain `text`, not a pg enum, and `ACCESS_RANK` falls back
   to `0` for anything unrecognized — a typo'd value silently resolves as the weakest grant.
-- **The disk-space widget hardcodes a hostname.** `/cloud/files/+page.svelte` fetches
+- **The disk-space widget hardcodes a hostname.** `components/DiskGauge.svelte` fetches
   `https://homelab.tail3fdd8a.ts.net:8080/cloud/api/disk-space` as an absolute URL rather than the
   relative route, so the widget is tied to one deployment.
 - **`hasAccess()` and `assemble()` are unused** — both superseded (by `getAccessLevel` and

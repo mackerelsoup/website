@@ -6,7 +6,11 @@ const file = (n: string) => ({ basename: n, filename: `/${n}`, type: 'file' as c
 const current = { basename: 'b', filename: '/b' };
 
 test('drops siblings the identity has no Grant on', async () => {
-	const out = await visibleSiblings([dir('a'), dir('b'), dir('secret')], current, async (p) => p !== '/secret');
+	const out = await visibleSiblings(
+		[dir('a'), dir('b'), dir('secret')],
+		current,
+		async (p) => p !== '/secret'
+	);
 	expect(out.map((s) => s.basename)).toEqual(['a', 'b']);
 });
 
