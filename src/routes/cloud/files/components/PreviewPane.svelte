@@ -127,7 +127,7 @@
 		min-width: 0;
 	}
 	.preview {
-		height: 112px;
+		height: 350px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
