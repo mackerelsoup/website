@@ -118,7 +118,7 @@
 						ondblclick={() => !selecting && onopen(i)}
 					>
 						<span class="marker" aria-hidden="true"
-							>{#if selecting}{isSel ? '◼' : '▫'}{:else if i === cursor}▌{/if}</span
+							>{#if selecting}<span class="box" class:on={isSel}></span>{:else if i === cursor}▌{/if}</span
 						>
 						<span class="name"
 							>{f.basename}{dir ? '/' : ''}{#if isSel}<span class="sr"> (selected)</span>{/if}</span
@@ -219,6 +219,18 @@
 	}
 	.picked .marker {
 		color: var(--m-danger);
+	}
+	// selection checkbox; draws in the marker's colour so picked rows go red
+	.box {
+		display: inline-block;
+		width: 9.5px;
+		height: 9.5px;
+		border: 1.5px solid currentColor;
+		border-radius: 2.5px;
+		vertical-align: -1px;
+		&.on {
+			background: currentColor;
+		}
 	}
 	.cursor .name {
 		color: var(--m-text-strong);
