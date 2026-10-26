@@ -1,12 +1,14 @@
 import { WEBDAV_PASSWORD, WEBDAV_URL } from '$env/static/private';
 import type { PageServerLoad, Actions } from './$types';
-import { listDirectory, moveItem, deleteItem } from '$lib/webdav';
-import { redirect, fail } from '@sveltejs/kit';
+import { listDirectory, moveItem, deleteItem, exists, createDirectory,  } from '$lib/webdav';
+import { redirect, fail, isActionFailure } from '@sveltejs/kit';
 import { getAccessLevel, isAdmin } from '$lib/server/permissions';
 import { validateFolderName } from '$lib/server/path-utils';
+import { visibleSiblings } from '$lib/server/siblings';
 import { db } from '$lib/server/db';
 import { folderPermission, folderRequest } from '$lib/server/db/schema';
 import { and, eq } from 'drizzle-orm';
+
 
 const WEBDAV_USERNAME: string = 'homelab';
 
@@ -48,6 +50,7 @@ async function folderRequestState(
 	});
 	return ownEditGrant ? null : 'eligible';
 }
+
 
 export const actions: Actions = {
 	/** Record a pending Folder Request. Provisioning happens on approval, not here. */
@@ -99,7 +102,7 @@ export const actions: Actions = {
 		const returnPath = form.get('returnPath') as string;
 		const isDirectory = form.get('isDirectory') === 'true';
 
-		if (!await getAccessLevel(locals.tailscaleIdentity?.login, path)) {
+		if (!(await getAccessLevel(locals.tailscaleIdentity?.login, path))) {
 			denyRedirect(path);
 		}
 
@@ -130,25 +133,65 @@ export const actions: Actions = {
 		);
 
 		backToPath(returnPath);
-	}
+	},
+
+  createFolder: async ({ request, locals }) => {
+          const form = await request.formData();
+          const parent = form.get('returnPath') as string;
+
+          const result = validateFolderName(form.get('name'));
+          if (!result.ok) return fail(400, { message: result.message });
+
+          // access is checked against the parent, never trusting the client for anything else
+          if ((await getAccessLevel(locals.tailscaleIdentity?.login, parent)) !== 'edit') {
+                  return fail(403, { message: 'Forbidden' });
+          }
+
+          const path = `${parent === '/' ? '' : parent}/${result.name}`;
+          if (await exists(WEBDAV_URL, WEBDAV_USERNAME, WEBDAV_PASSWORD, path)) {
+                  return fail(409, { message: `${result.name} already exists` });
+          }
+
+          await createDirectory(WEBDAV_URL, WEBDAV_USERNAME, WEBDAV_PASSWORD, path);
+          return { success: true };
+  },
+
 };
 
 export const load: PageServerLoad = async ({ url, locals }) => {
 	const path = url.searchParams.get('path') ?? '/';
 
-	const accessLevel = await getAccessLevel(locals.tailscaleIdentity?.login, path)
+	const accessLevel = await getAccessLevel(locals.tailscaleIdentity?.login, path);
 	if (!accessLevel) {
-		denyRedirect(path)
+		denyRedirect(path);
 	}
 
 	// Only the landing listing carries the Folder Request action — asking for a Personal Folder
 	// from three directories deep makes no sense, and it keeps the extra queries off every load.
-	const requestState = path === '/' ? await folderRequestState(locals.tailscaleIdentity?.login) : null;
+	const requestState =
+		path === '/' ? await folderRequestState(locals.tailscaleIdentity?.login) : null;
+
+	const login = locals.tailscaleIdentity?.login;
+	const here = { basename: path.split('/').pop() ?? '', filename: path };
+
+	// Parent pane: sibling Folders, filtered through the same access check as everything else
+	// so folder names the Grants don't cover are never sent to the client.
+	const loadSiblings = async () => {
+		if (path === '/') return [];
+		const parent = path.replace(/\/$/, '').split('/').slice(0, -1).join('/') || '/';
+		try {
+			if (!(await getAccessLevel(login, parent))) return [here];
+			const entries = await listDirectory(WEBDAV_URL, WEBDAV_USERNAME, WEBDAV_PASSWORD, parent);
+			return await visibleSiblings(entries, here, async (p) => !!(await getAccessLevel(login, p)));
+		} catch {
+			return [here];
+		}
+	};
 
 	try {
 		const contents = await listDirectory(WEBDAV_URL, WEBDAV_USERNAME, WEBDAV_PASSWORD, path);
-		return { files: contents, path, accessLevel, requestState };
+		return { files: contents, path, accessLevel, requestState, siblings: await loadSiblings() };
 	} catch {
-		return { files: [], path, accessLevel, requestState, error: true };
+		return { files: [], path, accessLevel, requestState, siblings: [here], error: true };
 	}
 };

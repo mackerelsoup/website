@@ -75,6 +75,7 @@ export async function createDirectory(url: string, username: string, password: s
   await client.createDirectory(path, { recursive: true });
 }
 
+
 export async function exists(url: string, username: string, password: string, path: string): Promise<boolean> {
   const client = getClient(url, username, password);
   return client.exists(path);

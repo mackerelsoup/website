@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Miller columns</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit}
+</style>
+</helmet>
+<div style="width: 1280px; height: 760px; box-sizing: border-box; padding: 20px 24px 16px; background: #12131c; color: #c9cbe0; font-family: 'JetBrains Mono','Cascadia Code','Fira Code',monospace; font-size: 13px; line-height: 1.55; display: flex; flex-direction: column; gap: 14px">
+
+<div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 24px">
+<pre style="margin: 0; font: inherit; font-size: 11px; line-height: 1.05; color: {{accent}}; white-space: pre">       oooo                              .o8
+       `888                             "888
+ .ooooo.  888   .ooooo.  oooo  oooo   .oooo888
+d88' `"Y8 888  d88' `88b `888  `888  d88' `888
+888       888  888   888  888   888  888   888
+888   .o8 888  888   888  888   888  888   888
+`Y8bod8P'o888o `Y8bod8P'  `V88V"V8P' `Y8bod88P"</pre>
+<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px">
+<div><span style="color: #8a90b3">zt@homelab</span> <span style="color: #4a4f70">│</span> <span style="color: #7fd6a4">edit</span> <span style="color: #4a4f70">│</span> <span style="color: #8a90b3">tailscale</span></div>
+<div><span style="color: #8a90b3">disk </span><span style="color: #7fd6a4">▕██████████</span><span style="color: #2b2e45">██████████████</span><span style="color: #7fd6a4">▏</span> <span style="color: #c9cbe0">42%</span> <span style="color: #8a90b3">1.8T / 4.3T</span></div>
+<div style="color: #8a90b3">/family/photos</div>
+</div>
+</div>
+
+<div style="flex: 1; min-height: 0; display: grid; grid-template-columns: 200px minmax(0, 1fr) 360px; border: 1px solid #2b2e45; border-radius: 6px; overflow: hidden; background: #171826">
+
+<div style="border-right: 1px solid #2b2e45; padding: 10px 0; overflow: hidden">
+<div style="padding: 0 14px 6px; color: #8a90b3">family</div>
+<div style="padding: 0 14px; background: #23253a; color: {{accent}}; font-weight: 700">▌photos/</div>
+<div style="padding: 0 14px 0 22px; color: #c9cbe0">recipes/</div>
+<div style="padding: 0 14px 0 22px; color: #c9cbe0">taxes/</div>
+<div style="padding: 0 14px 0 22px; color: #c9cbe0">letters/</div>
+</div>
+
+<div style="border-right: 1px solid #2b2e45; padding: 10px 0; overflow: hidden; display: flex; flex-direction: column">
+<div style="display: grid; grid-template-columns: 22px 1fr 72px 92px; padding: 0 14px 6px; color: #8a90b3"><span></span><span>name</span><span style="text-align: right">size</span><span style="text-align: right">modified</span></div>
+<sc-for list="{{rows}}" as="f" hint-placeholder-count="9">
+<button onClick="{{ f.pick }}" style="display: grid; grid-template-columns: 22px 1fr 72px 92px; width: 100%; padding: 0 14px; border: 0; text-align: left; cursor: pointer; background: {{f.bg}}; color: {{f.color}}; font-weight: {{f.weight}}"><span style="color: {{accent}}">{{f.marker}}</span><span>{{f.label}}</span><span style="text-align: right; color: #8a90b3">{{f.size}}</span><span style="text-align: right; color: #8a90b3">{{f.when}}</span></button>
+</sc-for>
+</div>
+
+<div style="padding: 14px 18px; overflow: hidden; display: flex; flex-direction: column; gap: 12px">
+<pre style="margin: 0; font: inherit; font-size: 12px; line-height: 1.15; color: {{accent}}; height: 112px">{{cur.art}}</pre>
+<div style="font-size: 15px; font-weight: 700; color: #e6e7f5; word-break: break-all">{{cur.label}}</div>
+<div style="display: grid; grid-template-columns: 84px 1fr; row-gap: 2px">
+<span style="color: #8a90b3">type</span><span>{{cur.kind}}</span>
+<span style="color: #8a90b3">size</span><span>{{cur.size}}</span>
+<span style="color: #8a90b3">modified</span><span>{{cur.when}}</span>
+<span style="color: #8a90b3">access</span><span style="color: #7fd6a4">edit (personal)</span>
+<span style="color: #8a90b3">path</span><span style="word-break: break-all">/family/photos/{{cur.label}}</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto">
+<span style="border: 1px solid #2b2e45; padding: 0 8px; border-radius: 4px"><span style="color: {{accent}}">o</span> open</span>
+<span style="border: 1px solid #2b2e45; padding: 0 8px; border-radius: 4px"><span style="color: {{accent}}">r</span> rename</span>
+<span style="border: 1px solid #2b2e45; padding: 0 8px; border-radius: 4px"><span style="color: {{accent}}">y</span> copy link</span>
+<span style="border: 1px solid #2b2e45; padding: 0 8px; border-radius: 4px; color: #ff7a8a"><span>d</span> delete</span>
+</div>
+</div>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 16px">
+<div style="display: flex; gap: 12px; align-items: center"><span style="background: {{accent}}; color: #12131c; font-weight: 700; padding: 0 8px; border-radius: 3px">NORMAL</span><span style="color: #8a90b3">{{position}}</span></div>
+<div style="color: #8a90b3; white-space: nowrap"><span style="color: {{accent}}">j/k</span> move  <span style="color: {{accent}}">l</span> open  <span style="color: {{accent}}">h</span> up  <span style="color: {{accent}}">space</span> select  <span style="color: {{accent}}">u</span> upload  <span style="color: {{accent}}">/</span> filter  <span style="color: {{accent}}">?</span> help</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#f2b659","options":["#f2b659","#8fb4ff","#7fd6a4","#ff9e7a"]},"$preview":{"width":1280,"height":760}}'>
+class Component extends DCLogic {
+state = { sel: 3 };
+renderVals() {
+  const accent = this.props.accent ?? '#f2b659';
+  const img = '        ▲\n      ▲▓▓▲      ☼\n    ▲▓▓▓▓▓▲  ▲\n  ▲▒▓▓▓▓▓▓▓▓▲▒▓▲\n░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▒▒░\n~~~~~~~~~~~~~~~~~~';
+  const doc = '┌──────────┐\n│ ▬▬▬▬▬▬   │\n│ ▬▬▬▬▬▬▬▬ │\n│ ▬▬▬▬     │\n│ ▬▬▬▬▬▬▬  │\n└──────────┘';
+  const dir = ' ┌──────┐\n┌┘──────┴─────┐\n│             │\n│   ▒▒▒▒▒▒    │\n└─────────────┘';
+  const data = [
+    { label: '2024/', dir: true, kind: 'folder · 214 items', size: '—', when: 'Mar 02', art: dir },
+    { label: '2025/', dir: true, kind: 'folder · 96 items', size: '—', when: 'Oct 09', art: dir },
+    { label: 'raw/', dir: true, kind: 'folder · 31 items', size: '—', when: 'Sep 28', art: dir },
+    { label: 'IMG_2041.jpg', kind: 'image/jpeg', size: '4.2 MB', when: '2h ago', art: img },
+    { label: 'IMG_2040.jpg', kind: 'image/jpeg', size: '3.8 MB', when: '2h ago', art: img },
+    { label: 'IMG_2039.jpg', kind: 'image/jpeg', size: '5.1 MB', when: '2h ago', art: img },
+    { label: 'holiday-itinerary.pdf', kind: 'application/pdf', size: '212 KB', when: 'Oct 08', art: doc },
+    { label: 'budget-2026.xlsx', kind: 'spreadsheet', size: '48 KB', when: 'Oct 01', art: doc },
+    { label: 'notes.txt', kind: 'text/plain', size: '2 KB', when: 'Sep 19', art: doc }
+  ];
+  const sel = this.state.sel;
+  const rows = data.map((d, i) => ({
+    ...d,
+    marker: i === sel ? '▌' : '',
+    bg: i === sel ? '#23253a' : 'transparent',
+    color: d.dir ? accent : '#c9cbe0',
+    weight: d.dir ? '700' : '400',
+    pick: () => this.setState({ sel: i })
+  }));
+  return { accent, rows, cur: data[sel], position: (sel + 1) + ' of ' + data.length };
+}
+}
+</script>
+</body>
+</html>

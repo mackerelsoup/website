@@ -23,14 +23,14 @@
 
 <style>
 	:global(body) {
-		background: #1e1f2e;
+		background: var(--bg);
 		margin: 0;
 	}
 
 	.no-access {
-		font-family: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-		background: #1e1f2e;
-		color: #c4c6d4;
+		font-family: var(--mono);
+		background: var(--bg);
+		color: var(--fg);
 		min-height: 100vh;
 		display: flex;
 		flex-direction: column;
@@ -43,8 +43,9 @@
 
 	.glyph {
 		font-size: 3rem;
-		color: #f87171;
+		color: var(--danger);
 		margin: 0 0 8px;
+		animation: slam 0.35s var(--ease-out);
 	}
 
 	h1 {
@@ -52,39 +53,61 @@
 		font-weight: 400;
 		letter-spacing: 0.05em;
 		margin: 0 0 16px;
-		color: #f87171;
-	}
-
-	.path {
-		color: #6b728e;
-		margin: 0 0 8px;
-		word-break: break-all;
+		color: var(--danger);
 	}
 
 	.detail {
-		color: #c4c6d4;
 		font-size: 0.9rem;
 		max-width: 40ch;
 		margin: 0 0 32px;
+		text-wrap: balance;
 	}
 
 	.login {
-		color: #c4c6d4;
 		font-weight: 600;
 	}
 
 	.back {
 		background: none;
 		border: none;
-		padding: 0;
-		color: #6b728e;
+		border-radius: 3px;
+		padding: 2px 6px;
+		color: var(--muted);
 		text-decoration: none;
 		font-family: inherit;
 		font-size: 0.85rem;
 		cursor: pointer;
+		transition:
+			color var(--fast),
+			background var(--fast);
 
 		&:hover {
-			color: #c4c6d4;
+			color: var(--fg);
+			background: var(--raised);
+		}
+	}
+
+	/* lands oversized, then a short shake */
+	@keyframes slam {
+		0% {
+			transform: scale(2.6);
+			opacity: 0;
+		}
+		35% {
+			transform: scale(1);
+			opacity: 1;
+		}
+		50% {
+			transform: translateX(-10px);
+		}
+		65% {
+			transform: translateX(8px);
+		}
+		80% {
+			transform: translateX(-4px);
+		}
+		100% {
+			transform: none;
 		}
 	}
 </style>

@@ -1,785 +1,584 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
+	import type { FileStat } from 'webdav';
 	import { UploadManager } from './upload.svelte';
-	import IconPlay from '~icons/tdesign/play';
-	import IconPause from '~icons/gg/play-pause';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { enhance } from '$app/forms';
+	import Modal from './folder-modal.svelte';
+	import Header from './components/Header.svelte';
+	import ParentPane from './components/ParentPane.svelte';
+	import ListPane from './components/ListPane.svelte';
+	import PreviewPane from './components/PreviewPane.svelte';
+	import StatusBar from './components/StatusBar.svelte';
+	import UploadBlock from './components/UploadBlock.svelte';
+	import SelectBlock from './components/SelectBlock.svelte';
+	import HelpOverlay from './components/HelpOverlay.svelte';
+	import { parentPath } from './format';
 
 	let { data, form }: PageProps = $props();
-	// --- cloud disk space ---
-	let diskSpace = $state<{
-		totalBytes: number;
-		usedBytes: number;
-		freeBytes: number;
-		checkedAt: number;
-	} | null>(null);
-	let diskSpaceError = $state<string | null>(null);
-	let diskSpacePercent = $derived(
-		diskSpace ? Math.round((diskSpace.usedBytes / diskSpace.totalBytes) * 100) : 0
+
+	const upload = new UploadManager();
+	const access = $derived(data.accessLevel as 'view' | 'edit' | null);
+	const canEdit = $derived(access === 'edit');
+
+	// --- the list: folders first, narrowed by the filter box ---
+	let filter = $state('');
+	let filterEl = $state<HTMLInputElement>();
+	const rows = $derived(
+		[...(data.files as FileStat[])]
+			.sort((a, b) =>
+				a.type === b.type ? a.basename.localeCompare(b.basename) : a.type === 'directory' ? -1 : 1
+			)
+			.filter((f) => f.basename.toLowerCase().includes(filter.trim().toLowerCase()))
 	);
-	let diskSpaceStatus = $derived(
-		diskSpacePercent < 60 ? 'healthy' : diskSpacePercent < 85 ? 'warning' : 'critical'
-	);
 
-	function formatBytes(bytes: number): string {
-		if (bytes < 1024) return `${bytes}B`;
-		const units = ['KB', 'MB', 'GB', 'TB'];
-		let value = bytes / 1024;
-		let unitIndex = 0;
-		while (value >= 1024 && unitIndex < units.length - 1) {
-			value /= 1024;
-			unitIndex++;
-		}
-		return `${value.toFixed(1)}${units[unitIndex]}`;
-	}
+	// --- cursor (the highlighted row) ---
+	let cursorRaw = $state(0);
+	const cursor = $derived(Math.max(0, Math.min(cursorRaw, rows.length - 1)));
+	const cur = $derived<FileStat | null>(rows[cursor] ?? null);
 
-	async function fetchDiskSpace() {
-		try {
-			const res = await fetch('https://homelab.tail3fdd8a.ts.net:8080/cloud/api/disk-space');
-			const body = await res.json();
-			if (!res.ok) {
-				diskSpaceError = body.error ?? `HTTP ${res.status}`;
-				return;
-			}
-			diskSpace = body;
-			diskSpaceError = null;
-		} catch (e) {
-			diskSpaceError = e instanceof Error ? e.message : String(e);
-		}
-	}
-
-	onMount(() => {
-		fetchDiskSpace();
-		const interval = setInterval(fetchDiskSpace, 60_000);
-		return () => clearInterval(interval);
-	});
-
-	// --- navigation ---
-	// strips the last path segment to get the parent directory URL
-	function parentPath(path: string): string {
-		const parts = path.replace(/\/$/, '').split('/');
-		parts.pop();
-		return parts.join('/') || '/';
-	}
-
-	// --- dropdown "..." menu ---
-	let menuOpen = $state<string | null>(null);
-
-	// opens the menu for a row, or closes it if already open
-	function toggleMenu(filename: string) {
-		menuOpen = menuOpen === filename ? null : filename;
-	}
-
-	// closes whatever menu is currently open (used by the background overlay)
-	function closeMenu() {
-		menuOpen = null;
-	}
-
-	// --- rename ---
-	let renaming = $state<string | null>(null); // filename of the row currently showing the rename input
-	let renameValue = $state('');
-
-	// opens the inline rename form for a row
-	function startRename(filename: string, basename: string) {
-		menuOpen = null;
-		renaming = filename;
-		renameValue = basename;
-	}
-
-	// dismisses the rename form without submitting
-	function cancelRename() {
-		renaming = null;
-	}
-
-	// --- multi-select (checkboxes + bulk delete) ---
+	// --- modes & transient UI state ---
 	let selecting = $state(false);
 	let selected = $state(new Set<string>());
-	let lastSelectedIndex = $state<number | null>(null); // anchor for shift-click range select
+	let anchor = $state<number | null>(null); // anchor for shift range select
+	let renaming = $state<string | null>(null);
+	let renameValue = $state('');
+	let confirming = $state(false); // delete confirm step (keyboard + sheet)
+	let helpOpen = $state(false);
+	let sheetOpen = $state(false); // bottom-sheet preview on narrow screens
+	let copied = $state(false);
+	let showModal = $state(false);
+	let folderError = $state('');
+	let fileInput: HTMLInputElement | undefined = $state();
+	let folderInput: HTMLInputElement | undefined = $state();
 
-	// enters select mode and clears any previous selection
-	function enterSelect() {
-		selecting = true;
+	const mode = $derived(selecting ? 'select' : upload.phase !== 'idle' ? 'upload' : 'normal');
+	const position = $derived(
+		selecting
+			? `${selected.size} of ${rows.length}`
+			: `${rows.length ? cursor + 1 : 0} of ${rows.length}`
+	);
+	const selectedBytes = $derived(
+		(data.files as FileStat[]).reduce((n, f) => n + (selected.has(f.filename) ? f.size : 0), 0)
+	);
+
+	// a new folder starts with a clean slate
+	$effect.pre(() => {
+		void data.path;
+		cursorRaw = 0;
+		filter = '';
+		selecting = false;
 		selected = new Set();
-		lastSelectedIndex = null;
-		menuOpen = null;
-	}
+		anchor = null;
+		renaming = null;
+		confirming = false;
+		sheetOpen = false;
+	});
 
-	// exits select mode and clears the selection
 	function exitSelect() {
 		selecting = false;
 		selected = new Set();
-		lastSelectedIndex = null;
+		anchor = null;
+		confirming = false;
 	}
 
-	// toggles a single row; shift-click extends the selection from the last touched row
-	function toggleSelect(filename: string, index: number, shiftKey: boolean) {
+	function enterSelect() {
+		selecting = true;
+		selected = new Set();
+		anchor = null;
+	}
+
+	// toggles a row; shift extends a range from the last touched row
+	function toggleSelect(i: number, shift: boolean) {
 		const next = new Set(selected);
-		if (shiftKey && lastSelectedIndex !== null) {
-			const lo = Math.min(lastSelectedIndex, index);
-			const hi = Math.max(lastSelectedIndex, index);
-			const adding = !next.has(filename);
-			for (let i = lo; i <= hi; i++) {
-				const f = data.files[i].filename;
-				if (adding) next.add(f);
-				else next.delete(f);
+		const name = rows[i].filename;
+		if (shift && anchor !== null) {
+			const adding = !next.has(name);
+			for (let j = Math.min(anchor, i); j <= Math.max(anchor, i); j++) {
+				if (adding) next.add(rows[j].filename);
+				else next.delete(rows[j].filename);
 			}
 		} else {
-			if (next.has(filename)) next.delete(filename);
-			else next.add(filename);
-			lastSelectedIndex = index;
+			if (next.has(name)) next.delete(name);
+			else next.add(name);
+			anchor = i;
 		}
 		selected = next;
 	}
 
-	// --- upload ---
-	let uploading = $state(false); // controls whether the file/folder picker buttons are shown
-	let fileInput: HTMLInputElement = $state()!;
-	let folderInput: HTMLInputElement = $state()!;
-
-	const upload = new UploadManager();
-
-	// shows the upload picker buttons in the toolbar
-	function startUploading() {
-		uploading = true;
+	async function move(delta: number, extend = false) {
+		if (!rows.length) return;
+		const to = Math.max(0, Math.min(cursor + delta, rows.length - 1));
+		if (extend && canEdit) {
+			if (!selecting) enterSelect();
+			if (anchor === null) {
+				anchor = cursor;
+				selected = new Set(selected).add(rows[cursor].filename);
+			}
+			const next = new Set(selected);
+			for (let j = Math.min(anchor, to); j <= Math.max(anchor, to); j++) next.add(rows[j].filename);
+			selected = next;
+		}
+		cursorRaw = to;
+		await tick();
+		document.getElementById(`row-${to}`)?.focus();
 	}
 
-	// hides the upload picker buttons (e.g. on cancel or Escape)
-	function stopUploading() {
-		uploading = false;
+	function open(f: FileStat | null = cur) {
+		if (!f) return;
+		if (f.type === 'directory') goto(`/cloud/files?path=${encodeURIComponent(f.filename)}`);
+		else window.open(`/cloud/file?path=${encodeURIComponent(f.filename)}`, '_blank', 'noopener');
 	}
 
-	// opens the hidden <input type="file"> for individual files
-	function triggerUpload() {
-		fileInput.click();
+	function up() {
+		if (data.path !== '/') goto(`/cloud/files?path=${encodeURIComponent(parentPath(data.path))}`);
 	}
 
-	// opens the hidden <input type="file" webkitdirectory> for whole folders
-	function triggerFolderUpload() {
-		folderInput.click();
+	function startRename() {
+		if (!canEdit || !cur) return;
+		sheetOpen = false;
+		renaming = cur.filename;
+		renameValue = cur.basename;
 	}
 
-	function triggerPause() {
-		upload.pause();
+	function askDelete() {
+		if (!canEdit) return;
+		if (selecting ? selected.size > 0 : cur) confirming = true;
 	}
 
-	function triggerUnpause() {
-		upload.resume();
+	function confirmDelete() {
+		(
+			document.getElementById(selecting ? 'delete-many' : 'delete-one') as HTMLFormElement
+		)?.requestSubmit();
 	}
+
+	async function copyLink() {
+		if (!cur || cur.type !== 'file') return;
+		const url = `${location.origin}/cloud/file?path=${encodeURIComponent(cur.filename)}`;
+		try {
+			await navigator.clipboard.writeText(url);
+		} catch {
+			// navigator.clipboard needs a secure context; this site may be served over plain http
+			const ta = document.createElement('textarea');
+			ta.value = url;
+			document.body.append(ta);
+			ta.select();
+			document.execCommand('copy');
+			ta.remove();
+		}
+		copied = true;
+		setTimeout(() => (copied = false), 1500);
+	}
+
+	function onkeydown(e: KeyboardEvent) {
+		if (e.ctrlKey || e.metaKey || e.altKey || showModal) return;
+		const t = e.target as HTMLElement;
+		// never act while typing; the inputs handle their own Escape/Enter
+		if (t.closest('input, textarea, select, [contenteditable="true"]')) return;
+		// leave Enter/space to focused buttons and plain links (but not list rows)
+		if ((e.key === 'Enter' || e.key === ' ') && t.closest('button, a:not([data-row])')) return;
+
+		if (e.key === 'Escape') {
+			if (confirming) confirming = false;
+			else if (helpOpen) helpOpen = false;
+			else if (sheetOpen) sheetOpen = false;
+			else if (renaming) renaming = null;
+			else if (selecting) exitSelect();
+			else filter = '';
+			return;
+		}
+		if (helpOpen) {
+			if (e.key === '?') helpOpen = false;
+			return;
+		}
+		if (confirming) {
+			e.preventDefault();
+			if (e.key === 'y' || e.key === 'Enter') confirmDelete();
+			else confirming = false;
+			return;
+		}
+
+		const key = e.key;
+		const run = (fn: () => void) => {
+			e.preventDefault();
+			fn();
+		};
+		switch (key) {
+			case 'j':
+			case 'ArrowDown':
+				return run(() => move(1));
+			case 'k':
+			case 'ArrowUp':
+				return run(() => move(-1));
+			case 'J':
+				return run(() => move(1, true));
+			case 'K':
+				return run(() => move(-1, true));
+			case 'l':
+			case 'o':
+			case 'Enter':
+				return run(() => open());
+			case 'h':
+			case 'Backspace':
+				return run(up);
+			case '/':
+				return run(() => filterEl?.focus());
+			case '?':
+				return run(() => (helpOpen = true));
+			case 'y':
+				return run(copyLink);
+			case 'p':
+				if (upload.phase === 'uploading')
+					run(() => (upload.paused ? upload.resume() : upload.pause()));
+				return;
+		}
+		if (!canEdit) return;
+		switch (key) {
+			case ' ':
+				return run(() => {
+					if (!selecting) enterSelect();
+					if (cur) toggleSelect(cursor, false);
+				});
+			case 'a':
+				return run(() => {
+					if (!selecting) enterSelect();
+					selected = new Set(rows.map((f) => f.filename));
+				});
+			case 'u':
+				return run(() => fileInput?.click());
+			case 'U':
+				return run(() => folderInput?.click());
+			case 'r':
+				return run(startRename);
+			case 'd':
+				return run(askDelete);
+			case 'n':
+				return run(() => (showModal = true));
+		}
+	}
+
+	onMount(() => {
+		// sheet is only meaningful on narrow screens; drop it when the viewport widens
+		const mq = matchMedia('(max-width: 899px)');
+		const onChange = () => !mq.matches && (sheetOpen = false);
+		mq.addEventListener('change', onChange);
+		return () => mq.removeEventListener('change', onChange);
+	});
 </script>
 
-<svelte:window
-	onkeydown={(e) => {
-		if (e.key === 'Escape') {
-			if (selecting) exitSelect();
-			stopUploading();
-		}
-	}}
-/>
+<svelte:window {onkeydown} />
+
+<Modal bind:showModal>
+	<div class="head">
+		<h2>New folder</h2>
+		<p>Choose a name to get started.</p>
+	</div>
+	<form
+		method="POST"
+		action="?/createFolder"
+		use:enhance={() =>
+			async ({ result, update }) => {
+				if (result.type === 'failure') {
+					folderError = (result.data?.message as string) ?? 'Failed';
+				} else {
+					folderError = '';
+					showModal = false;
+				}
+				await update();
+			}}
+	>
+		<input type="hidden" name="returnPath" value={data.path} />
+		<input
+			name="name"
+			aria-label="Folder name"
+			placeholder="Folder name"
+			required
+			pattern="\S.*"
+			autocomplete="off"
+		/>
+		<button type="submit">Create</button>
+	</form>
+	{#if folderError}<p role="alert">{folderError}</p>{/if}
+</Modal>
 
 <div class="files">
-	{#if menuOpen}
-		<button class="overlay" aria-label="Close menu" onclick={closeMenu}></button>
+	<Header accessLevel={access} />
+
+	{#if data.requestState === 'pending'}
+		<p class="notice">folder request pending approval</p>
+	{:else if data.requestState === 'eligible'}
+		<form class="notice request" method="POST" action="?/requestFolder">
+			<label for="folder-request-name">request a folder:</label>
+			<input
+				id="folder-request-name"
+				name="name"
+				maxlength="64"
+				placeholder="folder name"
+				required
+				autocomplete="off"
+			/>
+			<button type="submit">request</button>
+		</form>
 	{/if}
-	{#if data.error}
-		<div class="prompt">
-			<span class="prompt-user">zt@homelab:</span><span class="prompt-path">{data.path}</span>
+	{#if form?.message}
+		<p class="notice" class:bad={!form.success} role="status">{form.message}</p>
+	{/if}
+
+	{#if canEdit && !data.error}
+		<div class="toolbar">
+			{#if selecting}
+				<button type="button" onclick={exitSelect}>cancel</button>
+				{#if selected.size > 0}
+					<button type="button" class="danger" onclick={askDelete}>delete ({selected.size})</button>
+				{/if}
+			{:else}
+				<button type="button" onclick={enterSelect}>select</button>
+				<button type="button" onclick={() => fileInput?.click()}>upload files</button>
+				<button type="button" onclick={() => folderInput?.click()}>upload folder</button>
+				<button type="button" onclick={() => (showModal = true)}>new folder</button>
+			{/if}
 		</div>
+	{/if}
+
+	{#if upload.phase !== 'idle' || selecting}
+		<div class="mobile-only stack">
+			<UploadBlock {upload} />
+			{#if selecting}
+				<SelectBlock
+					count={selected.size}
+					bytes={selectedBytes}
+					{confirming}
+					oncancel={() => (confirming ? (confirming = false) : exitSelect())}
+					ondelete={askDelete}
+				/>
+			{/if}
+		</div>
+	{/if}
+
+	{#if data.error}
 		<p class="error">connection refused</p>
 	{:else}
-		<div>
-			<div class="prompt">
-				<div>
-					<span class="prompt-user">zt@homelab:</span><span class="prompt-path">{data.path}</span>
-				</div>
-				{#if data.accessLevel === 'edit'}
-					<div class="prompt-actions">
-						{#if selecting}
-							<button type="button" class="upload-btn" onclick={exitSelect}>cancel</button>
-							{#if selected.size > 0}
-								<form method="POST" action="?/deleteMany">
-									<input type="hidden" name="returnPath" value={data.path} />
-									{#each [...selected] as path}
-										<input type="hidden" name="path" value={path} />
-										<input
-											type="hidden"
-											name="isDirectory"
-											value={data.files.find((f) => f.filename === path)?.type === 'directory'}
-										/>
-									{/each}
-									<button type="submit" class="delete-btn">delete ({selected.size})</button>
-								</form>
-							{/if}
-						{:else if uploading}
-							<button type="button" class="upload-btn" onclick={stopUploading}>cancel</button>
-							<button class="upload-btn" type="button" onclick={triggerFolderUpload}>folder</button>
-							<button class="upload-btn" type="button" onclick={triggerUpload}>files</button>
-						{:else}
-							<button type="button" class="upload-btn" onclick={enterSelect}>select</button>
-							<button type="button" class="upload-btn" onclick={startUploading}>upload</button>
-						{/if}
-					</div>
-				{/if}
-			</div>
-
-			{#if data.requestState === 'pending'}
-				<p class="prompt">folder request pending approval</p>
-			{:else if data.requestState === 'eligible'}
-				<form class="rename-form" method="POST" action="?/requestFolder">
-					<label for="folder-request-name">request a folder:</label>
-					<input
-						id="folder-request-name"
-						class="rename-input"
-						name="name"
-						maxlength="64"
-						placeholder="folder name"
-						required
-					/>
-					<button type="submit" class="rename-confirm">request</button>
-				</form>
-			{/if}
-			{#if form?.message}
-				<p class={form.success ? 'prompt' : 'error'}>{form.message}</p>
-			{/if}
-
-			<div class="disk-space-banner">
-				{#if !diskSpaceError}
-					<div class="disk-space-bar">
-						<div class="disk-space-fill {diskSpaceStatus}" style="width:{diskSpacePercent}%"></div>
-					</div>
-					<span class="disk-space-used {diskSpaceStatus}">{diskSpacePercent}% used</span>
-				{:else}
-					<div>{diskSpaceError}</div>
-				{/if}
-			</div>
-
-			<input
-				type="file"
-				name="files"
-				multiple
-				bind:this={fileInput}
-				onchange={() => {
-					if (fileInput.files?.length) {
-						upload.start(data.path, fileInput.files);
-						fileInput.value = '';
-					}
+		<div class="body">
+			<ParentPane path={data.path} siblings={data.siblings} />
+			<ListPane
+				{rows}
+				total={data.files.length}
+				path={data.path}
+				{cursor}
+				{selected}
+				{selecting}
+				{renaming}
+				bind:renameValue
+				bind:filter
+				bind:filterEl
+				onpick={(i, e) => (selecting ? toggleSelect(i, e.shiftKey) : (cursorRaw = i))}
+				onopen={(i) => open(rows[i])}
+				onmenu={(i) => {
+					cursorRaw = i;
+					sheetOpen = true;
 				}}
-				style="display:none"
+				oncancelRename={() => (renaming = null)}
 			/>
-			<input
-				type="file"
-				name="files"
-				multiple
-				webkitdirectory
-				bind:this={folderInput}
-				onchange={() => {
-					if (folderInput.files?.length) {
-						upload.start(data.path, folderInput.files, true);
-						folderInput.value = '';
-					}
+			<PreviewPane
+				entry={cur}
+				accessLevel={access}
+				{upload}
+				{selecting}
+				selectedCount={selected.size}
+				{selectedBytes}
+				{confirming}
+				{copied}
+				{sheetOpen}
+				onopen={() => open()}
+				onrename={startRename}
+				oncopy={copyLink}
+				ondelete={askDelete}
+				oncancelConfirm={() => (confirming = false)}
+				onclose={() => {
+					sheetOpen = false;
+					confirming = false;
 				}}
-				style="display:none"
 			/>
-
-			{#if upload.phase !== 'idle'}
-				<div class="upload-banner">
-					{#if upload.phase === 'uploading'}
-						{#if upload.paused}
-							<span class="banner-label">Upload paused</span>
-							<div class="progress-bar">
-								<div class="progress-fill" style="width:{upload.percent}%"></div>
-							</div>
-							<button class="pause-play-btn" onclick={triggerUnpause}>
-								<IconPlay></IconPlay>
-							</button>
-						{:else}
-							<span class="banner-label">uploading... {upload.percent}%</span>
-							<span class="banner-filename"
-								>{upload.uploadingFilename}{upload.uploadingTotal > 1
-									? ` (${upload.uploadingIndex}/${upload.uploadingTotal})`
-									: ''}</span
-							>
-							<div class="progress-bar">
-								<div class="progress-fill" style="width:{upload.percent}%"></div>
-							</div>
-							<button class="pause-play-btn" onclick={triggerPause}>
-								<IconPause></IconPause>
-							</button>
-						{/if}
-					{:else if upload.phase === 'saving'}
-						{@const savingPercent =
-							upload.savingTotal > 0
-								? Math.round((upload.savingWritten / upload.savingTotal) * 100)
-								: 0}
-						<span class="banner-label">saving to cloud... {savingPercent}%</span>
-						<span class="banner-filename"
-							>{upload.savingFilename}{upload.savingTotal > 0
-								? ` (${formatBytes(upload.savingWritten)}/${formatBytes(upload.savingTotal)})`
-								: ''}</span
-						>
-						<div class="progress-bar">
-							<div class="progress-fill" style="width:{savingPercent}%"></div>
-						</div>
-					{:else if upload.phase === 'done'}
-						<span class="banner-label">done</span>
-					{:else if upload.phase === 'error'}
-						<span class="banner-label error-text">{upload.error}</span>
-						<button class="banner-dismiss" onclick={() => upload.dismissError()}>dismiss</button>
-					{/if}
-				</div>
-			{/if}
 		</div>
-
-		{#if data.path !== '/'}
-			<div class="row">
-				<a class="entry dir" href="/cloud/files?path={encodeURIComponent(parentPath(data.path))}"
-					>..</a
-				>
-			</div>
-		{/if}
-
-		{#each data.files as file, i}
-			<div class="row" class:row-selected={selected.has(file.filename)}>
-				{#if selecting}
-					<input
-						type="checkbox"
-						class="select-check"
-						checked={selected.has(file.filename)}
-						onclick={(e) => toggleSelect(file.filename, i, e.shiftKey)}
-					/>
-				{/if}
-
-				{#if renaming === file.filename}
-					<form class="rename-form" method="POST" action="?/rename">
-						<input type="hidden" name="returnPath" value={data.path} />
-						<input type="hidden" name="path" value={file.filename} />
-						<input type="hidden" name="isDirectory" value={file.type === 'directory'} />
-						<input class="rename-input" name="newName" bind:value={renameValue} />
-						<button type="submit" class="rename-confirm">ok</button>
-						<button type="button" class="rename-cancel" onclick={cancelRename}>cancel</button>
-					</form>
-				{:else if file.type === 'directory'}
-					<a
-						class="entry dir"
-						href="/cloud/files?path={encodeURIComponent(file.filename)}"
-						onclick={selecting
-							? (e) => {
-									e.preventDefault();
-									toggleSelect(file.filename, i, e.shiftKey);
-								}
-							: undefined}>{file.basename}/</a
-					>
-				{:else}
-					<a
-						class="entry file"
-						href="/cloud/file?path={encodeURIComponent(file.filename)}"
-						target="_blank"
-						onclick={selecting
-							? (e) => {
-									e.preventDefault();
-									toggleSelect(file.filename, i, e.shiftKey);
-								}
-							: undefined}>{file.basename}</a
-					>
-				{/if}
-
-				{#if !selecting && renaming !== file.filename}
-					<div class="menu-wrapper">
-						<button class="dots" onclick={() => toggleMenu(file.filename)}>...</button>
-						{#if menuOpen === file.filename}
-							<div class="dropdown">
-								<button onclick={() => startRename(file.filename, file.basename)}>rename</button>
-								<form method="POST" action="?/delete">
-									<input type="hidden" name="path" value={file.filename} />
-									<input type="hidden" name="isDirectory" value={file.type === 'directory'} />
-									<input type="hidden" name="returnPath" value={data.path} />
-									<button type="submit" class="delete">delete</button>
-								</form>
-							</div>
-						{/if}
-					</div>
-				{/if}
-			</div>
-		{/each}
 	{/if}
+
+	<StatusBar {mode} {position} {canEdit} />
 </div>
 
+{#if helpOpen}
+	<HelpOverlay {canEdit} onclose={() => (helpOpen = false)} />
+{/if}
+
+<!-- forms behind the delete confirm step; submitted via requestSubmit() or `form=` buttons -->
+{#if canEdit}
+	<form id="delete-one" method="POST" action="?/delete" hidden>
+		<input type="hidden" name="path" value={cur?.filename ?? ''} />
+		<input type="hidden" name="isDirectory" value={cur?.type === 'directory'} />
+		<input type="hidden" name="returnPath" value={data.path} />
+	</form>
+	<form id="delete-many" method="POST" action="?/deleteMany" hidden>
+		<input type="hidden" name="returnPath" value={data.path} />
+		{#each (data.files as FileStat[]).filter((f) => selected.has(f.filename)) as f (f.filename)}
+			<input type="hidden" name="path" value={f.filename} />
+			<input type="hidden" name="isDirectory" value={f.type === 'directory'} />
+		{/each}
+	</form>
+{/if}
+
+<input
+	type="file"
+	multiple
+	bind:this={fileInput}
+	tabindex="-1"
+	aria-hidden="true"
+	onchange={() => {
+		if (fileInput?.files?.length) {
+			upload.start(data.path, fileInput.files);
+			fileInput.value = '';
+		}
+	}}
+	style="display:none"
+/>
+<input
+	type="file"
+	multiple
+	webkitdirectory
+	bind:this={folderInput}
+	tabindex="-1"
+	aria-hidden="true"
+	onchange={() => {
+		if (folderInput?.files?.length) {
+			upload.start(data.path, folderInput.files, true);
+			folderInput.value = '';
+		}
+	}}
+	style="display:none"
+/>
+
 <style lang="scss">
-.files {
-	font-family: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-	background: #1e1f2e;
-	color: #c4c6d4;
-	min-height: 100vh;
-	padding: 24px 32px;
-	box-sizing: border-box;
-}
+	// All colours for this page live here; components read them via var(--m-*).
+	.files {
+		--m-ground: #12131c;
+		--m-panel: #171826;
+		--m-line: #2b2e45;
+		--m-text: #c9cbe0;
+		--m-text-strong: #e6e7f5;
+		--m-muted: #8a90b3;
+		--m-dim: #4a4f70; // decorative only, never text
+		--m-selected: #23253a;
+		--m-selected-danger: #2a2630;
+		--m-accent: #f2b659;
+		--m-ok: #7fd6a4;
+		--m-danger: #ff7a8a;
 
-.overlay {
-	position: fixed;
-	inset: 0;
-	z-index: 51;
-}
+		box-sizing: border-box;
+		height: 100dvh;
+		padding: 20px 24px 16px;
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+		background: var(--m-ground);
+		color: var(--m-text);
+		font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+		font-size: 13px;
+		line-height: 1.55;
 
-.error {
-	color: #f87171;
-	font-size: 0.9rem;
-
-	&::before {
-		content: 'bash: ';
-		color: #50577a;
-	}
-}
-
-// ---- prompt bar: path + upload/select/delete actions ----
-.prompt {
-	display: flex;
-	flex-wrap: wrap;
-	justify-content: space-between;
-	align-items: center;
-	row-gap: 8px;
-	font-size: 0.95rem;
-	margin-bottom: 8px;
-	user-select: none;
-}
-
-.prompt-user {
-	color: #6b728e;
-}
-.prompt-path {
-	color: #6b728e;
-}
-.prompt-dollar {
-	color: #c4c6d4;
-}
-.prompt-cmd {
-	color: #c4c6d4;
-}
-
-.prompt-actions {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 2px;
-	margin-left: 10px;
-	form {
-		display: contents;
-	}
-}
-
-.upload-btn {
-	background: none;
-	color: #6b728e;
-	font-family: inherit;
-	font-size: 0.85rem;
-	padding: 1px 5px;
-	cursor: pointer;
-	transition:
-		background 0.1s,
-		color 0.1s,
-		border-color 0.1s;
-
-	&::before {
-		content: '[ ';
-	}
-	&::after {
-		content: ' ]';
+		:global(a:focus-visible),
+		:global(button:focus-visible),
+		:global(input:focus-visible) {
+			outline: 2px solid var(--m-accent);
+			outline-offset: 2px;
+		}
 	}
 
-	&:hover {
-		background: #404258;
-		border-color: #6b728e;
-		color: #c4c6d4;
-	}
-}
-
-.delete-btn {
-	background: none;
-	color: #f87171;
-	font-family: inherit;
-	font-size: 0.85rem;
-	padding: 1px 10px;
-	cursor: pointer;
-	transition:
-		background 0.1s,
-		color 0.1s,
-		border-color 0.1s;
-
-	&::before {
-		content: '[ ';
-	}
-	&::after {
-		content: ' ]';
+	.body {
+		flex: 1;
+		min-height: 0;
+		display: grid;
+		grid-template-columns: 200px minmax(0, 1fr) 360px;		border: 1px solid var(--m-line);
+		border-radius: 6px;
+		overflow: hidden;
+		background: var(--m-panel);
 	}
 
-	&:hover {
-		background: #3a2a2a;
-		border-color: #f87171;
-		color: #f87171;
-	}
-}
-
-// ---- disk space banner ----
-.disk-space-banner {
-	display: flex;
-	flex: 1;
-	align-items: center;
-	margin-bottom: 8px;
-}
-
-.disk-space-bar {
-	flex: 1;
-	height: 6px;
-	margin-right: 10px;
-	border-radius: 75px;
-	background: #404258;
-}
-
-.disk-space-fill {
-	height: 100%;
-	background: #6b728e;
-	border-radius: 75px;
-	transition:
-		width 0.1s,
-		background 0.1s;
-
-	&.healthy {
-		background: #7a9e7e;
-	}
-	&.warning {
-		background: #c9a15a;
-	}
-	&.critical {
-		background: #c9636f;
-	}
-}
-
-.disk-space-used {
-	font-size: 0.85rem;
-	color: #6b728e;
-}
-
-// ---- upload progress banner ----
-.upload-banner {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	border-left: 2px solid #50577a;
-	padding: 5px 10px;
-	margin-bottom: 12px;
-	font-size: 0.85rem;
-	color: #6b728e;
-}
-
-.pause-play-btn {
-	font-size: 1.4rem; // controls icon size
-	background: none;
-	border: none;
-	color: #6b728e;
-	cursor: pointer;
-	padding: 2px;
-	display: flex;
-
-	&:focus-visible {
-		outline: 1px solid #6b728e;
-	}
-	&:hover {
-		background: #404258;
-		color: #c4c6d4;
-	}
-}
-
-.banner-label {
-	color: #6b728e;
-}
-.banner-filename {
-	color: #c4c6d4;
-}
-.error-text {
-	color: #f87171;
-}
-
-.banner-dismiss {
-	background: none;
-	border: none;
-	color: #50577a;
-	font-family: inherit;
-	font-size: 0.85rem;
-	cursor: pointer;
-	padding: 0;
-
-	&:hover {
-		color: #c4c6d4;
-	}
-}
-
-.progress-bar {
-	flex: 1;
-	height: 2px;
-	background: #404258;
-}
-
-.progress-fill {
-	height: 100%;
-	background: #6b728e;
-	transition: width 0.1s;
-}
-
-// ---- file/directory list rows ----
-.row {
-	position: relative;
-	display: flex;
-	align-items: center;
-	margin-bottom: 1px;
-	user-select: none;
-}
-
-.row-selected {
-	background: #272838;
-}
-
-.entry {
-	flex: 1;
-	display: flex;
-	align-items: center;
-	padding: 2px 6px;
-	text-decoration: none;
-	font-size: 0.95rem;
-
-	&:focus-visible {
-		outline: 1px solid #6b728e;
-	}
-	&:hover {
-		background: #404258;
-	}
-}
-
-.dir {
-	color: #6b728e;
-	font-weight: bold;
-}
-.file {
-	color: #c4c6d4;
-	margin: 2px;
-}
-
-.select-check {
-	appearance: none;
-	width: 11px;
-	height: 11px;
-	border: 1px solid #50577a;
-	background: transparent;
-	cursor: pointer;
-	margin: 0 6px 0 4px;
-	flex-shrink: 0;
-
-	&:checked {
-		background: #6b728e;
-		border-color: #6b728e;
-	}
-}
-
-// ---- per-row "..." dropdown menu ----
-.dots {
-	background: none;
-	border: none;
-	color: #50577a;
-	font-size: 0.9rem;
-	cursor: pointer;
-	padding: 2px 8px;
-	line-height: 1;
-	font-family: inherit;
-	opacity: 1;
-	transition:
-		opacity 0.1s,
-		color 0.1s;
-}
-
-.dots:hover {
-	color: #c4c6d4;
-	background: #404258;
-}
-
-.menu-wrapper {
-	position: relative;
-}
-
-.dropdown {
-	position: absolute;
-	right: 0;
-	top: calc(100% + 2px);
-	background: #404258;
-	border: 1px solid #50577a;
-	overflow: hidden;
-	z-index: 100;
-	min-width: 120px;
-	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-	font-family: inherit;
-
-	button,
-	form {
-		display: block;
-		width: 100%;
+	.notice {
 		margin: 0;
-	}
+		color: var(--m-muted);
 
-	button {
-		background: none;
-		border: none;
-		color: #c4c6d4;
-		padding: 7px 14px;
-		text-align: left;
-		cursor: pointer;
-		font-size: 0.9rem;
-		font-family: inherit;
-		width: 100%;
-
-		&:hover {
-			background: #474e68;
-			color: #e0e2f0;
-		}
-		&.delete {
-			color: #f87171;
-		}
-		&.delete:hover {
-			background: #3a2a2a;
+		&.bad {
+			color: var(--m-danger);
 		}
 	}
-}
+	.error {
+		margin: 0;
+		color: var(--m-danger);
+		flex: 1;
+	}
+	.request {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		input {
+			background: transparent;
+			border: 0;
+			border-bottom: 1px solid var(--m-line);
+			color: var(--m-text);
+			font: inherit;
+			padding: 0 4px;
+			&:focus {
+				outline: none;
+				border-bottom-color: var(--m-accent);
+			}
+		}
+		button {
+			background: none;
+			border: 0;
+			color: var(--m-accent);
+			font: inherit;
+			cursor: pointer;
+		}
+	}
 
-// ---- inline rename form (swapped in for a row's link) ----
-.rename-form {
-	flex: 1;
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	padding: 2px 6px;
-}
+	.toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 4px 14px;
+		margin: -6px 0;
+		button {
+			background: none;
+			border: 0;
+			padding: 0;
+			font: inherit;
+			color: var(--m-muted);
+			cursor: pointer;
+			border-radius: 3px;
+			&:hover {
+				color: var(--m-text-strong);
+			}
+			&.danger {
+				color: var(--m-danger);
+			}
+		}
+	}
 
-.rename-input {
-	flex: 1;
-	background: transparent;
-	border: none;
-	border-bottom: 1px solid #6b728e;
-	color: #c4c6d4;
-	padding: 2px 4px;
-	font-size: 0.95rem;
-	font-family: inherit;
-	outline: none;
-}
+	.mobile-only {
+		display: none;
+	}
 
-.rename-confirm,
-.rename-cancel {
-	background: none;
-	border: none;
-	cursor: pointer;
-	padding: 2px 6px;
-	font-size: 0.9rem;
-	font-family: inherit;
-}
-
-.rename-confirm {
-	color: #6b728e;
-}
-.rename-cancel {
-	color: #f87171;
-}
+	@media (max-width: 899px) {
+		.files {
+			padding: 14px 16px 12px;
+			overflow-x: hidden;
+		}
+		.body {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.mobile-only {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+		}
+	}
 </style>

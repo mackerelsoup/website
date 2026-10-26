@@ -19,6 +19,10 @@ export class UploadManager {
 	uploadingFilename = $state('');
 	uploadingIndex = $state(0);
 	uploadingTotal = $state(0);
+	speed = $state(0); // smoothed bytes/s, 0 until a chunk has been timed
+	eta = $state<number | null>(null); // seconds, null while unknown
+	private totalBytes = 0;
+	private doneBytes = 0;
 
 	// "saving" phase — server-driven, reported over SSE once all chunks land
 	savingFilename = $state('');
@@ -81,6 +85,10 @@ export class UploadManager {
 		useRelativePaths: boolean
 	) {
 		const fileList = [...files];
+		this.totalBytes = fileList.reduce((sum, f) => sum + f.size, 0);
+		this.doneBytes = 0;
+		this.speed = 0;
+		this.eta = null;
 
 		es.onmessage = (e) => {
 			const ev = JSON.parse(e.data);
@@ -151,11 +159,13 @@ export class UploadManager {
 			if (init.done) {
 				// server already had every chunk and finalized this file — nothing to send
 				this.percent = 100;
+				this.doneBytes += file.size;
 				continue;
 			}
 
 			const have = new Set<number>(init.received);
 			let confirmed = have.size;
+			this.doneBytes += Math.min(file.size, have.size * CHUNK_SIZE);
 			this.percent = Math.round((confirmed / total) * 100);
 
 			const MAX_ATTEMPTS = 3;
@@ -170,6 +180,7 @@ export class UploadManager {
 					totalFiles: String(fileList.length)
 				});
 
+				const startedAt = performance.now();
 				let sent = false;
 				for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
 					try {
@@ -205,6 +216,13 @@ export class UploadManager {
 				}
 
 				confirmed++;
+				this.doneBytes += blob.size;
+				const seconds = (performance.now() - startedAt) / 1000;
+				if (seconds > 0) {
+					const instant = blob.size / seconds;
+					this.speed = this.speed ? this.speed * 0.7 + instant * 0.3 : instant;
+					this.eta = (this.totalBytes - this.doneBytes) / this.speed;
+				}
 				this.percent = Math.round((confirmed / total) * 100);
 			}
 		}
