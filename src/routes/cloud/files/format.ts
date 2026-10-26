@@ -48,3 +48,19 @@ export function formatDuration(seconds: number): string {
 
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp|avif|bmp|svg)$/i;
 export const isImage = (name: string) => IMAGE_EXT.test(name);
+
+// The `n` nearest images on each side of `cursor`, skipping non-images, nearest first (prev then next).
+export function neighborImages<T extends { type: string; basename: string }>(
+	rows: T[],
+	cursor: number,
+	n = 2
+): T[] {
+	const pick = (step: number) => {
+		const out: T[] = [];
+		for (let i = cursor + step; i >= 0 && i < rows.length && out.length < n; i += step) {
+			if (rows[i].type === 'file' && isImage(rows[i].basename)) out.push(rows[i]);
+		}
+		return out;
+	};
+	return [...pick(-1), ...pick(1)];
+}

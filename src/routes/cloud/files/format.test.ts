@@ -1,5 +1,12 @@
 import { test, expect } from 'bun:test';
-import { formatBytes, formatModified, parentPath, barCells, isImage } from './format';
+import {
+	formatBytes,
+	formatModified,
+	parentPath,
+	barCells,
+	isImage,
+	neighborImages
+} from './format';
 
 test('formatBytes', () => {
 	expect(formatBytes(512)).toBe('512 B');
@@ -27,4 +34,26 @@ test('barCells clamps', () => {
 test('isImage', () => {
 	expect(isImage('a.JPG')).toBe(true);
 	expect(isImage('a.pdf')).toBe(false);
+});
+
+test('neighborImages takes 2 images each side, skipping non-images', () => {
+	const f = (basename: string, type = 'file') => ({ basename, type });
+	const rows = [
+		f('a.png'),
+		f('b.png'),
+		f('d', 'directory'),
+		f('c.txt'),
+		f('cur.png'),
+		f('x.jpg'),
+		f('n.txt'),
+		f('y.jpg'),
+		f('z.jpg')
+	];
+	expect(neighborImages(rows, 4).map((r) => r.basename)).toEqual([
+		'b.png',
+		'a.png',
+		'x.jpg',
+		'y.jpg'
+	]);
+	expect(neighborImages(rows, 0).map((r) => r.basename)).toEqual(['b.png', 'cur.png']);
 });
