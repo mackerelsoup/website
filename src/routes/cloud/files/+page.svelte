@@ -493,12 +493,6 @@
 		font-size: 13px;
 		line-height: 1.55;
 
-		:global(a:focus-visible),
-		:global(button:focus-visible),
-		:global(input:focus-visible) {
-			outline: 2px solid var(--m-accent);
-			outline-offset: 2px;
-		}
 	}
 
 	.body {
