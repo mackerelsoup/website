@@ -41,7 +41,7 @@
 		<span class="bar" role="img" aria-label="{percent}% used, {status}">
 			<span class="fill {status}">▕{'█'.repeat(cells.filled)}</span><span class="empty"
 				>{'█'.repeat(cells.empty)}</span
-			><span class="fill {status}">▏</span>
+			>
 		</span>
 		{percent}%
 		<span class="muted">{formatBytes(space.usedBytes)} / {formatBytes(space.totalBytes)}</span>
