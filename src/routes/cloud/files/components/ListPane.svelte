@@ -308,4 +308,18 @@
 			padding-right: 42px;
 		}
 	}
+
+	// Dots are not needed on devices with a wider screen as the preview pane is always shown
+	@media (min-width: 900px) {
+		.dots {
+			display: none;
+		}
+		// the dots column used to supply the right gutter; keep header and rows aligned without it
+		.head {
+			padding-right: 14px;
+		}
+		.entry {
+			padding-right: 14px;
+		}
+	}
 </style>

@@ -14,7 +14,7 @@
 	import UploadBlock from './components/UploadBlock.svelte';
 	import SelectBlock from './components/SelectBlock.svelte';
 	import HelpOverlay from './components/HelpOverlay.svelte';
-	import { parentPath } from './format';
+	import { parentPath, neighborImages } from './format';
 
 	let { data, form }: PageProps = $props();
 
@@ -37,6 +37,15 @@
 	let cursorRaw = $state(0);
 	const cursor = $derived(Math.max(0, Math.min(cursorRaw, rows.length - 1)));
 	const cur = $derived<FileStat | null>(rows[cursor] ?? null);
+
+  $effect(() => {
+          const imgs = neighborImages(rows, cursor).map((f) => {
+                  const img = new Image();
+                  img.src = `/cloud/file?path=${encodeURIComponent(f.filename)}`;
+                  return img;
+          });
+          return () => imgs.forEach((img) => (img.src = ''));
+  });
 
 	// --- modes & transient UI state ---
 	let selecting = $state(false);
