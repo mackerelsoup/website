@@ -4,7 +4,6 @@
 	import { UploadManager } from './upload.svelte';
 	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { enhance } from '$app/forms';
 	import Modal from './folder-modal.svelte';
 	import Header from './components/Header.svelte';
 	import ParentPane from './components/ParentPane.svelte';
@@ -58,7 +57,6 @@
 	let sheetOpen = $state(false); // bottom-sheet preview on narrow screens
 	let copied = $state(false);
 	let showModal = $state(false);
-	let folderError = $state('');
 	let fileInput: HTMLInputElement | undefined = $state();
 	let folderInput: HTMLInputElement | undefined = $state();
 
@@ -278,40 +276,8 @@
 
 <svelte:window {onkeydown} />
 
-<Modal bind:showModal>
-	<div class="head">
-		<h2>New folder</h2>
-		<p>Choose a name to get started.</p>
-	</div>
-	<form
-		method="POST"
-		action="?/createFolder"
-		use:enhance={() =>
-			async ({ result, update }) => {
-				if (result.type === 'failure') {
-					folderError = (result.data?.message as string) ?? 'Failed';
-				} else {
-					folderError = '';
-					showModal = false;
-				}
-				await update();
-			}}
-	>
-		<input type="hidden" name="returnPath" value={data.path} />
-		<input
-			name="name"
-			aria-label="Folder name"
-			placeholder="Folder name"
-			required
-			pattern="\S.*"
-			autocomplete="off"
-		/>
-		<button type="submit">Create</button>
-	</form>
-	{#if folderError}<p role="alert">{folderError}</p>{/if}
-</Modal>
-
 <div class="files">
+	<Modal bind:showModal path={data.path} />
 	<Header accessLevel={access} />
 
 	{#if data.requestState === 'pending'}
@@ -413,11 +379,12 @@
 	{/if}
 
 	<StatusBar {mode} {position} {canEdit} />
-</div>
 
-{#if helpOpen}
-	<HelpOverlay {canEdit} onclose={() => (helpOpen = false)} />
-{/if}
+	<!-- inside .files so it inherits the --m-* colour variables -->
+	{#if helpOpen}
+		<HelpOverlay {canEdit} onclose={() => (helpOpen = false)} />
+	{/if}
+</div>
 
 <!-- forms behind the delete confirm step; submitted via requestSubmit() or `form=` buttons -->
 {#if canEdit}
