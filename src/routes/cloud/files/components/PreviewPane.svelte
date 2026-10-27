@@ -47,8 +47,6 @@
 		imgFailed = false;
 	});
 
-	const FOLDER = ' ┌──────┐\n┌┘──────┴─────┐\n│             │\n│   ▒▒▒▒▒▒    │\n└─────────────┘';
-	const DOC = '┌──────────┐\n│ ▬▬▬▬▬▬   │\n│ ▬▬▬▬▬▬▬▬ │\n│ ▬▬▬▬     │\n│ ▬▬▬▬▬▬▬  │\n└──────────┘';
 </script>
 
 <aside class:open={sheetOpen} aria-label="Preview">
@@ -68,7 +66,17 @@
 					onerror={() => (imgFailed = true)}
 				/>
 			{:else}
-				<pre>{isDir ? FOLDER : DOC}</pre>
+				{#if isDir}
+						<svg class="folder" viewBox="0 0 20 14" shape-rendering="crispEdges" aria-hidden="true">
+							<path class="hi" d="M0 0h7v2h13v1H0z" />
+							<path class="lo" d="M0 4h20v10H0z" />
+						</svg>
+					{:else}
+						<svg class="doc" viewBox="0 0 12 14" shape-rendering="crispEdges" aria-hidden="true">
+								<path class="hi" fill-rule="evenodd" d="M0 0h9v1h1v1h1v1h1v11H0zM2 5h6v1H2zM2 7h8v1H2zM2 9h4v1H2zM2 11h7v1H2z" />
+								<path class="lo" d="M9 1h1v1h1v1H9z" />
+							</svg>
+					{/if}
 			{/if}
 		</div>
 		<div class="name">{entry.basename}</div>
@@ -132,12 +140,20 @@
 		align-items: center;
 		justify-content: center;
 		overflow: hidden;
-		pre {
-			margin: 0;
-			font: inherit;
-			font-size: 12px;
-			line-height: 1.15;
-			color: var(--m-accent);
+		.folder,
+		.doc {
+			display: block;
+			height: 70px;
+			width: auto;
+			.hi {
+				fill: var(--m-accent);
+			}
+			.lo {
+				fill: #886940; /* fallback */
+				@supports (color: color-mix(in srgb, red, blue)) {
+					fill: color-mix(in srgb, var(--m-accent) 50%, var(--m-bg, #1f1c28));
+				}
+			}
 		}
 		img {
 			max-width: 100%;
