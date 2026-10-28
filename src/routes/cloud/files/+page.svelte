@@ -212,15 +212,15 @@
 			fn();
 		};
 		switch (key) {
-			case 'j':
+			case 'k':
 			case 'ArrowDown':
 				return run(() => move(1));
-			case 'k':
+			case 'j':
 			case 'ArrowUp':
 				return run(() => move(-1));
-			case 'J':
-				return run(() => move(1, true));
 			case 'K':
+				return run(() => move(1, true));
+			case 'J':
 				return run(() => move(-1, true));
 			case 'l':
 			case 'o':
