@@ -93,9 +93,11 @@
 			<dd class="break">{entry.filename}</dd>
 		</dl>
 		<div class="chips">
-			<button type="button" onclick={onopen}><kbd>o</kbd> open</button>
-			{#if canEdit}<button type="button" onclick={onrename}><kbd>r</kbd> rename</button>{/if}
-			{#if !isDir}<button type="button" onclick={oncopy}
+			{#if !selecting}
+				<button type="button" onclick={onopen}><kbd>o</kbd> open</button>
+				{#if canEdit}<button type="button" onclick={onrename}><kbd>r</kbd> rename</button>{/if}
+			{/if}
+			{#if !isDir && !selecting}<button type="button" onclick={oncopy}
 					><kbd>y</kbd> {copied ? 'copied!' : 'copy link'}</button
 				>{/if}
 			{#if canEdit}

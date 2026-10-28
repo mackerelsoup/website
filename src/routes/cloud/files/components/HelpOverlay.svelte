@@ -2,7 +2,7 @@
 	let { canEdit, onclose }: { canEdit: boolean; onclose: () => void } = $props();
 
 	const keys: [string, string, boolean][] = [
-		['j / k, ↑ / ↓', 'move highlight', false],
+		['j / k, ↑ / ↓', 'move highlight up / down', false],
 		['l, Enter', 'open folder or file', false],
 		['h, Backspace', 'go to parent', false],
 		['/', 'filter the list', false],
